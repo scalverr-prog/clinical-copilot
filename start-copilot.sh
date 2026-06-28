@@ -42,42 +42,9 @@ find_screenpipe() {
     fi
 }
 
-# Kill old menu bar
+# Kill old processes
 pkill -f "menubar_app" 2>/dev/null || true
-
-# --- SCREENPIPE: Full health verification ---
-echo -n "Screenpipe: "
-if curl -s --connect-timeout 2 http://localhost:3030/health > /dev/null 2>&1; then
-    echo -e "${GREEN}running${NC}"
-else
-    SCREENPIPE_BIN=$(find_screenpipe)
-    if [ -z "$SCREENPIPE_BIN" ]; then
-        echo -e "${RED}not installed - run: brew install mediar-ai/screenpipe/screenpipe${NC}"
-    else
-        # Process exists but HTTP not responding = zombie state
-        if pgrep -x screenpipe > /dev/null 2>&1; then
-            echo -e "${YELLOW}zombie (restarting)${NC}"
-            pkill -9 screenpipe 2>/dev/null
-            pkill -9 -f "ffmpeg.*screenpipe" 2>/dev/null
-            sleep 1
-        else
-            echo -n "starting... "
-        fi
-
-        # Clean up any orphaned ffmpeg processes from screenpipe
-        pkill -9 -f "ffmpeg.*\.screenpipe/data" 2>/dev/null || true
-
-        # Start fresh
-        "$SCREENPIPE_BIN" --fps 1 > /tmp/screenpipe.log 2>&1 &
-
-        # Wait for HTTP server to actually respond
-        if wait_for_service "http://localhost:3030/health" "Screenpipe" 15; then
-            echo -e "${GREEN}ready${NC}"
-        else
-            echo -e "${RED}failed to start - check /tmp/screenpipe.log${NC}"
-        fi
-    fi
-fi
+pkill -f "screenpipe" 2>/dev/null || true
 
 # --- OLLAMA ---
 echo -n "Ollama: "
@@ -137,9 +104,9 @@ else
     fi
 fi
 
-# --- MENU BAR ---
-nohup python3 -m clinical_copilot.ui.menubar_app > /tmp/menubar.log 2>&1 &
-
 echo ""
-echo "✓ Copilot ready - click 🐧 in menu bar"
+echo "✓ Services ready"
 echo "✓ Note Critique Portal: http://localhost:8080/note_critique_portal.html"
+echo ""
+echo "To start Clinical Copilot CLI:"
+echo "  python3 -m clinical_copilot.main start"
