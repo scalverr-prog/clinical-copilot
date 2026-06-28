@@ -5,6 +5,7 @@ import threading
 import time
 import urllib.request
 import urllib.error
+import json
 from pathlib import Path
 import rumps
 
@@ -15,6 +16,7 @@ class CopilotMenuBar(rumps.App):
     PROJECT_DIR = Path(__file__).parent.parent.parent
     WATCHDOG_INTERVAL = 30  # Check every 30 seconds
     SCREENPIPE_URL = "http://localhost:3030/health"
+    CLINICAL_INSIGHT_URL = "http://localhost:8001"
 
     def __init__(self):
         super().__init__("🐧", quit_button=None)
@@ -26,6 +28,7 @@ class CopilotMenuBar(rumps.App):
         # Menu items
         self.menu = [
             rumps.MenuItem("Start Copilot", callback=self.toggle),
+            rumps.MenuItem("Submit Note", callback=self.submit_note),
             None,  # Separator
             rumps.MenuItem("Status", callback=self.show_status),
             None,
@@ -162,6 +165,73 @@ class CopilotMenuBar(rumps.App):
                 self.title = "🐧💤"  # Running but degraded
         else:
             self.title = "🐧"  # Stopped (same icon, menu shows state)
+
+    @rumps.clicked("Submit Note")
+    def submit_note(self, _):
+        """Open a window to submit a clinical note for analysis."""
+        # Get note from user via clipboard or dialog
+        window = rumps.Window(
+            message="Paste your clinical note below for analysis:",
+            title="Submit Clinical Note",
+            default_text="",
+            ok="Analyze",
+            cancel="Cancel",
+            dimensions=(500, 300)
+        )
+        response = window.run()
+
+        if response.clicked and response.text.strip():
+            note = response.text.strip()
+
+            # Show processing notification
+            rumps.notification(
+                "Clinical Insight",
+                "Analyzing note...",
+                "This may take 1-3 minutes"
+            )
+
+            # Run analysis in background thread
+            threading.Thread(
+                target=self._analyze_note,
+                args=(note,),
+                daemon=True
+            ).start()
+
+    def _analyze_note(self, note: str):
+        """Send note to Clinical Insight API and display results."""
+        try:
+            import httpx
+
+            # Create conversation
+            with httpx.Client(timeout=10.0) as client:
+                conv_resp = client.post(f"{self.CLINICAL_INSIGHT_URL}/api/chat/new")
+                conv_id = conv_resp.json().get("conversation_id")
+
+            # Send note for analysis (longer timeout for inference)
+            with httpx.Client(timeout=300.0) as client:
+                result = client.post(
+                    f"{self.CLINICAL_INSIGHT_URL}/api/chat/message",
+                    json={
+                        "conversation_id": conv_id,
+                        "message": f"Review this clinical note for safety concerns, drug interactions, and gaps:\n\n{note}"
+                    }
+                )
+                analysis = result.json().get("response", "No response")
+
+            # Show results in alert
+            # Truncate if too long for alert
+            display_text = analysis[:1500] + "..." if len(analysis) > 1500 else analysis
+            rumps.alert(
+                title="Clinical Insight Analysis",
+                message=display_text
+            )
+
+        except Exception as e:
+            rumps.notification(
+                "Clinical Insight",
+                "Analysis failed",
+                str(e)[:100]
+            )
 
     @rumps.clicked("Status")
     def show_status(self, _):
