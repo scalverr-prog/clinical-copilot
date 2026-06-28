@@ -41,8 +41,7 @@ def start():
     console.print(banner)
     console.print("\n[dim]Commands:[/dim]")
     console.print("[dim]  [bold]s[/bold] or [bold]submit[/bold]  = paste a note for analysis[/dim]")
-    console.print("[dim]  [bold]m[/bold] or [bold]monitor[/bold] = analyze what's on screen now[/dim]")
-    console.print("[dim]  [bold]w[/bold] or [bold]watch[/bold]   = continuous screen monitoring[/dim]")
+    console.print("[dim]  [bold]m[/bold] or [bold]monitor[/bold] = watch screen for clinical data[/dim]")
     console.print("[dim]  [bold]q[/bold] or [bold]quit[/bold]    = exit[/dim]\n")
 
     # Check Clinical Insight is running
@@ -70,14 +69,12 @@ def start():
                 break
             elif cmd in ["submit", "s"]:
                 submit_note()
-            elif cmd in ["monitor", "m"]:
-                analyze_screen_once()
-            elif cmd in ["watch", "w"]:
+            elif cmd in ["monitor", "m", "watch", "w"]:
                 watch_screen()
             elif cmd == "":
                 continue
             else:
-                console.print("[dim]Commands: submit (s), monitor (m), watch (w), quit (q)[/dim]")
+                console.print("[dim]Commands: submit (s), monitor (m), quit (q)[/dim]")
 
         except (KeyboardInterrupt, EOFError):
             console.print("\n[dim]Goodbye![/dim]\n")
