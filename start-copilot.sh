@@ -130,9 +130,9 @@ else
     fi
 fi
 
+# --- MENU BAR (penguin icon) ---
+nohup python3 -m clinical_copilot.ui.menubar_app > /tmp/menubar.log 2>&1 &
+
 echo ""
-echo "✓ Services ready"
+echo "✓ Copilot ready - click 🐧 in menu bar"
 echo "✓ Note Critique Portal: http://localhost:8080/note_critique_portal.html"
-echo ""
-echo "To start Clinical Copilot CLI:"
-echo "  python3 -m clinical_copilot.main start"

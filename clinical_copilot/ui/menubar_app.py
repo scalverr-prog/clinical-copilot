@@ -134,7 +134,7 @@ class CopilotMenuBar(rumps.App):
         threading.Thread(target=self._watchdog_loop, daemon=True).start()
 
         # Open terminal with copilot
-        cmd = f"cd '{self.PROJECT_DIR}' && python3 -m clinical_copilot.main on"
+        cmd = f"cd '{self.PROJECT_DIR}' && python3 -m clinical_copilot.main start"
         script = f'tell application "Terminal" to do script "{cmd}"'
         subprocess.run(["osascript", "-e", script])
         subprocess.run(["osascript", "-e", 'tell application "Terminal" to activate'])
