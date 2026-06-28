@@ -5,6 +5,7 @@ pydantic-settings==2.1.0
 httpx==0.26.0
 python-dotenv==1.0.0
 chromadb>=0.4.0
+numpy<2.0
 
 # Optional cloud LLM providers (only needed if not using local Ollama)
 # anthropic==0.18.1
