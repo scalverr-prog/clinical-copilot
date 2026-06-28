@@ -2,8 +2,7 @@ import time
 import json
 import re
 from typing import Optional
-import anthropic
-import openai
+import httpx
 
 from app.config import settings
 from app.schemas.clinical import (
@@ -95,14 +94,7 @@ class ClinicalReasoningEngine:
     """Core engine for clinical reasoning and gap analysis"""
 
     def __init__(self):
-        self.anthropic_client = None
-        self.openai_client = None
         self.case_rag = None
-
-        if settings.anthropic_api_key:
-            self.anthropic_client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-        if settings.openai_api_key:
-            self.openai_client = openai.OpenAI(api_key=settings.openai_api_key)
 
         # Initialize RAG store (lazy loading)
         try:
@@ -111,17 +103,35 @@ class ClinicalReasoningEngine:
             self.case_rag = None
 
     def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
-        """Call the configured LLM"""
-        if settings.llm_provider == "anthropic" and self.anthropic_client:
-            response = self.anthropic_client.messages.create(
+        """Call the configured LLM - defaults to local Ollama"""
+        if settings.llm_provider == "ollama":
+            # Use local Ollama
+            url = f"{settings.ollama_base_url}/api/generate"
+            payload = {
+                "model": settings.ollama_model,
+                "prompt": f"{system_prompt}\n\n{user_prompt}",
+                "stream": False,
+            }
+            with httpx.Client(timeout=120.0) as client:
+                response = client.post(url, json=payload)
+                response.raise_for_status()
+                return response.json().get("response", "")
+
+        elif settings.llm_provider == "anthropic" and settings.anthropic_api_key:
+            import anthropic
+            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+            response = client.messages.create(
                 model=settings.model_name,
                 max_tokens=4096,
                 system=system_prompt,
                 messages=[{"role": "user", "content": user_prompt}],
             )
             return response.content[0].text
-        elif settings.llm_provider == "openai" and self.openai_client:
-            response = self.openai_client.chat.completions.create(
+
+        elif settings.llm_provider == "openai" and settings.openai_api_key:
+            import openai
+            client = openai.OpenAI(api_key=settings.openai_api_key)
+            response = client.chat.completions.create(
                 model=settings.model_name,
                 max_tokens=4096,
                 messages=[
@@ -130,8 +140,9 @@ class ClinicalReasoningEngine:
                 ],
             )
             return response.choices[0].message.content
+
         else:
-            raise ValueError(f"No valid LLM client configured. Provider: {settings.llm_provider}")
+            raise ValueError(f"No valid LLM configured. Provider: {settings.llm_provider}")
 
     def analyze_presentation(
         self, presentation: ClinicalPresentation | str, proposed_plan: str = None

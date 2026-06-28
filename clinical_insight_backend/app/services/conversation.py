@@ -12,8 +12,7 @@ import time
 from typing import List, Dict, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
-import anthropic
-import openai
+import httpx
 
 from app.config import settings
 from app.prompts.clinical_insight import CLINICAL_INSIGHT_SYSTEM_PROMPT
@@ -39,13 +38,6 @@ class ConversationService:
 
     def __init__(self):
         self.conversations: Dict[str, Conversation] = {}
-        self.anthropic_client = None
-        self.openai_client = None
-
-        if settings.anthropic_api_key:
-            self.anthropic_client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-        if settings.openai_api_key:
-            self.openai_client = openai.OpenAI(api_key=settings.openai_api_key)
 
     def _get_enhanced_system_prompt(self) -> str:
         """Get the system prompt with conversation-specific additions"""
@@ -77,25 +69,51 @@ If you asked questions and the user didn't answer all of them, note which remain
 """
 
     def _call_llm(self, messages: List[Dict[str, str]], system_prompt: str) -> str:
-        """Call the configured LLM with conversation history"""
-        if settings.llm_provider == "anthropic" and self.anthropic_client:
-            response = self.anthropic_client.messages.create(
+        """Call the configured LLM with conversation history - defaults to local Ollama"""
+        if settings.llm_provider == "ollama":
+            # Build prompt from conversation history
+            prompt_parts = [system_prompt, ""]
+            for msg in messages:
+                role = "User" if msg["role"] == "user" else "Assistant"
+                prompt_parts.append(f"{role}: {msg['content']}")
+            prompt_parts.append("Assistant:")
+            full_prompt = "\n\n".join(prompt_parts)
+
+            url = f"{settings.ollama_base_url}/api/generate"
+            payload = {
+                "model": settings.ollama_model,
+                "prompt": full_prompt,
+                "stream": False,
+            }
+            with httpx.Client(timeout=120.0) as client:
+                response = client.post(url, json=payload)
+                response.raise_for_status()
+                return response.json().get("response", "")
+
+        elif settings.llm_provider == "anthropic" and settings.anthropic_api_key:
+            import anthropic
+            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+            response = client.messages.create(
                 model=settings.model_name,
                 max_tokens=4096,
                 system=system_prompt,
                 messages=messages,
             )
             return response.content[0].text
-        elif settings.llm_provider == "openai" and self.openai_client:
+
+        elif settings.llm_provider == "openai" and settings.openai_api_key:
+            import openai
+            client = openai.OpenAI(api_key=settings.openai_api_key)
             full_messages = [{"role": "system", "content": system_prompt}] + messages
-            response = self.openai_client.chat.completions.create(
+            response = client.chat.completions.create(
                 model=settings.model_name,
                 max_tokens=4096,
                 messages=full_messages,
             )
             return response.choices[0].message.content
+
         else:
-            raise ValueError(f"No valid LLM client configured")
+            raise ValueError(f"No valid LLM configured. Provider: {settings.llm_provider}")
 
     def create_conversation(self) -> str:
         """Create a new conversation and return its ID"""
