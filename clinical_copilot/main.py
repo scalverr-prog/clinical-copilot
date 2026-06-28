@@ -202,7 +202,8 @@ def analyze_screen_once():
 
 def watch_screen():
     """Continuously watch screen for clinical content with formatted alerts."""
-    from .monitor.screen_monitor import ScreenMonitor
+    from .analysis.clinical_analyzer import ClinicalAnalyzer, AlertLevel
+    from .capture.screenpipe import ScreenpipeClient
     from rich.panel import Panel
     from rich.text import Text
     from datetime import datetime
@@ -227,88 +228,74 @@ def watch_screen():
     console.print(Panel("[green]✓ Screen capture active[/green]\n[dim]Alerts will appear below as clinical data is detected...[/dim]",
                        title="Monitor Status", border_style="green"))
 
-    monitor = ScreenMonitor()
-    last_mrn = None
+    # Use the full clinical analyzer
+    analyzer = ClinicalAnalyzer()
+    screenpipe = ScreenpipeClient()
     alert_count = 0
-    check_count = 0
+    last_patient = None
+
+    # Alert level styles
+    STYLES = {
+        AlertLevel.ALERT: ("red", "[!] ALERT"),
+        AlertLevel.WARNING: ("yellow", "[*] WARNING"),
+        AlertLevel.SUGGESTION: ("cyan", "[>] SUGGESTION"),
+        AlertLevel.INFO: ("blue", "[i] INFO"),
+    }
 
     try:
         while True:
-            check_count += 1
+            # Get screen content
+            content = screenpipe.get_recent_content(limit=5)
 
-            # Get raw screen text first
-            screen_text = monitor.get_screen_text()
-            if screen_text and check_count == 1:
-                # Show what we're seeing on first check
-                preview = screen_text[:150].replace('\n', ' ')
-                console.print(Panel(f"[dim]Screen: {preview}...[/dim]", border_style="dim"))
-
-            context = monitor.check_for_clinical_content()
-
-            if context and context.has_clinical_data():
+            if content and content.text_content:
                 time_str = datetime.now().strftime("%H:%M:%S")
 
-                # Patient change alert
-                if context.mrn and context.mrn != last_mrn:
-                    last_mrn = context.mrn
-                    alert_count += 1
+                # Check for patient change
+                patient_info = analyzer.extract_patient_info(content.text_content)
+                if patient_info and patient_info != last_patient:
+                    last_patient = patient_info
+                    patient_str = analyzer.get_patient_context()
                     console.print(Panel(
-                        f"[bold]Patient: MRN {context.mrn}[/bold]",
-                        title=f"[!] PATIENT CHANGE [{time_str}]",
+                        f"[bold]{patient_str}[/bold]",
+                        title=f"[!] PATIENT [{time_str}]",
                         title_align="left",
                         border_style="yellow"
                     ))
 
-                # Show extracted data
-                if context.medications:
+                # Quick pattern-based checks (instant)
+                alerts = analyzer.quick_check(content)
+
+                # Display any alerts found
+                for alert in alerts:
+                    if analyzer.is_duplicate_alert(alert):
+                        continue
+
+                    analyzer.record_alert(alert)
                     alert_count += 1
-                    meds_text = Text()
-                    meds_text.append("Medications detected:\n", style="bold")
-                    for med in context.medications[:5]:
-                        meds_text.append(f"  • {med}\n")
-                    console.print(Panel(meds_text, title=f"[i] INFO [{time_str}]", title_align="left", border_style="cyan"))
 
-                if context.vitals:
-                    alert_count += 1
-                    vitals_text = Text()
-                    vitals_text.append("Vitals:\n", style="bold")
-                    for k, v in context.vitals.items():
-                        vitals_text.append(f"  {k.upper()}: {v}\n")
-                    console.print(Panel(vitals_text, title=f"[i] VITALS [{time_str}]", title_align="left", border_style="blue"))
+                    style, prefix = STYLES.get(alert.level, ("white", "[?]"))
 
-                if context.labs:
-                    alert_count += 1
-                    labs_text = Text()
-                    labs_text.append("Lab values:\n", style="bold")
-                    for k, v in context.labs.items():
-                        labs_text.append(f"  {k}: {v}\n")
-                    console.print(Panel(labs_text, title=f"[i] LABS [{time_str}]", title_align="left", border_style="magenta"))
+                    # Build alert content
+                    alert_text = Text()
+                    alert_text.append(alert.message + "\n", style="bold")
+                    if alert.details:
+                        alert_text.append(f"\n{alert.details}\n", style="dim")
+                    if alert.source_text:
+                        alert_text.append(f"\n[Source: {alert.source_text}]", style="italic dim")
 
-                # Analyze for concerns if we have enough data
-                if len(context.medications) >= 2 or context.labs:
-                    console.print(Panel("[dim]Analyzing for clinical concerns...[/dim]", border_style="dim"))
-                    analysis = monitor.analyze_with_clinical_insight(context)
-                    if analysis:
-                        # Parse and display as formatted alerts
-                        if "interaction" in analysis.lower() or "concern" in analysis.lower() or "risk" in analysis.lower():
-                            console.print(Panel(
-                                analysis[:500],
-                                title=f"[*] WARNING [{time_str}]",
-                                title_align="left",
-                                border_style="red"
-                            ))
-                        else:
-                            console.print(Panel(
-                                analysis[:500],
-                                title=f"[>] INSIGHT [{time_str}]",
-                                title_align="left",
-                                border_style="green"
-                            ))
+                    console.print(Panel(
+                        alert_text,
+                        title=f"{prefix} [{time_str}]",
+                        title_align="left",
+                        border_style=style
+                    ))
 
-            time.sleep(10)
+            time.sleep(5)  # Check every 5 seconds
 
     except KeyboardInterrupt:
         console.print(f"\n[dim]Stopped. {alert_count} alerts shown.[/dim]\n")
+        analyzer.close()
+        screenpipe.close()
 
 
 @cli.command()
