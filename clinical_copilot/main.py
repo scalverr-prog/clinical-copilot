@@ -25,7 +25,6 @@ def start():
 
     console.print("\n[bold cyan]╔══════════════════════════════════════════════════════════════════╗[/bold cyan]")
     console.print("[bold cyan]║              🐧 CLINICAL COPILOT                                 ║[/bold cyan]")
-    console.print("[bold cyan]║              Finding what humans miss                            ║[/bold cyan]")
     console.print("[bold cyan]╚══════════════════════════════════════════════════════════════════╝[/bold cyan]")
     console.print("\n[dim]Commands:[/dim]")
     console.print("[dim]  [bold]s[/bold] or [bold]submit[/bold]  = paste a note for analysis[/dim]")
