@@ -444,28 +444,40 @@ Assessment: STEMI`
             btn.disabled = true;
             btn.textContent = 'Analyzing...';
 
+            const startTime = Date.now();
             resultsArea.innerHTML = `
                 <div class="loading">
                     <div class="spinner"></div>
                     <p>Analyzing clinical note...</p>
+                    <p style="font-size: 0.85rem; color: #666; margin-top: 10px;">This may take 1-3 minutes on Intel Mac</p>
                 </div>
             `;
 
             try {
-                const response = await fetch(`${API_BASE}/api/reasoning/analyze-freeform`, {
+                // Create new conversation
+                const convResp = await fetch(`${API_BASE}/api/chat/new`, { method: 'POST' });
+                const convData = await convResp.json();
+                const conversationId = convData.conversation_id;
+
+                // Send note for analysis
+                const response = await fetch(`${API_BASE}/api/chat/message`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ narrative: note }),
+                    body: JSON.stringify({
+                        conversation_id: conversationId,
+                        message: `Review this clinical note and identify any safety concerns, drug interactions, missing information, or pattern breaks:\n\n${note}`
+                    }),
                 });
 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
-                const analysis = await response.json();
-                displayResults(analysis);
+                const result = await response.json();
+                const processingTime = Math.round((Date.now() - startTime) / 1000);
+                displayChatResults(result.response, processingTime);
 
             } catch (error) {
                 resultsArea.innerHTML = `
@@ -482,6 +494,31 @@ Assessment: STEMI`
                 btn.disabled = false;
                 btn.textContent = 'Analyze Note';
             }
+        }
+
+        function displayChatResults(response, processingTime) {
+            const resultsArea = document.getElementById('resultsArea');
+
+            // Format the response with markdown-like styling
+            let formattedResponse = response
+                .replace(/\*\*What I noticed:\*\*/g, '<div class="section-title warning">🔍 What I Noticed</div>')
+                .replace(/\*\*How these connect:\*\*/g, '<div class="section-title info">🔗 How These Connect</div>')
+                .replace(/\*\*Why this matters:\*\*/g, '<div class="section-title critical">⚠️ Why This Matters</div>')
+                .replace(/\*\*What the data doesn't answer:\*\*/g, '<div class="section-title">❓ Information Gaps</div>')
+                .replace(/\*\*Recommendation:\*\*/g, '<div class="section-title success">✅ Recommendation</div>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>');
+
+            resultsArea.innerHTML = `
+                <div class="analysis-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <div class="section-title">🧠 Clinical Insight Analysis</div>
+                        <span style="font-size: 0.8rem; color: #666;">Processed in ${processingTime}s</span>
+                    </div>
+                    <div class="reasoning-text"><p>${formattedResponse}</p></div>
+                </div>
+            `;
         }
 
         function displayResults(analysis) {
