@@ -74,4 +74,9 @@ async def get_test_cases():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "llm_provider": settings.llm_provider}
+    # Show model name for ollama
+    if settings.llm_provider == "ollama":
+        model = settings.ollama_model
+    else:
+        model = settings.llm_provider
+    return {"status": "healthy", "llm_provider": model}
