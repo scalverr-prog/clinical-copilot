@@ -23,9 +23,22 @@ def start():
     """Start Clinical Copilot - submit notes for analysis."""
     import httpx
 
-    console.print("\n[bold cyan]╔══════════════════════════════════════════════════════════════════╗[/bold cyan]")
-    console.print("[bold cyan]║              🐧 CLINICAL COPILOT                                 ║[/bold cyan]")
-    console.print("[bold cyan]╚══════════════════════════════════════════════════════════════════╝[/bold cyan]")
+    banner = """
+[bold cyan]╔═══════════════════════════════════════════════════════════════════╗
+║                                                                   ║
+║     ██████╗██╗     ██╗███╗   ██╗██╗ ██████╗ █████╗ ██╗           ║
+║    ██╔════╝██║     ██║████╗  ██║██║██╔════╝██╔══██╗██║           ║
+║    ██║     ██║     ██║██╔██╗ ██║██║██║     ███████║██║           ║
+║    ██║     ██║     ██║██║╚██╗██║██║██║     ██╔══██║██║           ║
+║    ╚██████╗███████╗██║██║ ╚████║██║╚██████╗██║  ██║███████╗      ║
+║     ╚═════╝╚══════╝╚═╝╚═╝  ╚═══╝╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝      ║
+║                       COPILOT v1.0                                ║
+║                                                                   ║
+║          Real-time Clinical Decision Support                      ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝[/bold cyan]
+"""
+    console.print(banner)
     console.print("\n[dim]Commands:[/dim]")
     console.print("[dim]  [bold]s[/bold] or [bold]submit[/bold]  = paste a note for analysis[/dim]")
     console.print("[dim]  [bold]m[/bold] or [bold]monitor[/bold] = analyze what's on screen now[/dim]")
