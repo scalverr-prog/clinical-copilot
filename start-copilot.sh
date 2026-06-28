@@ -42,8 +42,7 @@ find_screenpipe() {
     fi
 }
 
-# Kill old menu bar (will restart fresh)
-pkill -f "menubar_app" 2>/dev/null || true
+# NOTE: Penguin (menubar_app) is NEVER killed - it persists across restarts
 
 # --- SCREENPIPE: Screen capture for clinical monitoring ---
 echo -n "Screenpipe: "
@@ -130,9 +129,25 @@ else
     fi
 fi
 
-# --- MENU BAR (penguin icon) ---
-nohup python3 -m clinical_copilot.ui.menubar_app > /tmp/menubar.log 2>&1 &
+# --- MENU BAR (penguin icon - NEVER terminated, only start if not running) ---
+if ! pgrep -f "menubar_app" > /dev/null 2>&1; then
+    nohup python3 -m clinical_copilot.ui.menubar_app > /tmp/menubar.log 2>&1 &
+fi
+
+# --- SERVICE WATCHDOG (keeps services running) ---
+nohup python3 "$SCRIPT_DIR/service_watchdog.py" > /tmp/watchdog.log 2>&1 &
+
+# --- CLINICAL MONITOR (Terminal popup with Rich formatting - auto-starts) ---
+osascript -e "
+tell application \"Terminal\"
+    activate
+    do script \"cd '$SCRIPT_DIR' && python3 simple_monitor.py\"
+end tell
+"
 
 echo ""
-echo "✓ Copilot ready - click 🐧 in menu bar"
+echo "✓ Clinical Copilot monitoring started"
+echo "✓ Penguin icon in menu bar"
+echo "✓ Uses Clinical Insight with mistral:7b"
+echo "✓ Press Ctrl+C in terminal to stop"
 echo "✓ Note Critique Portal: http://localhost:8080/note_critique_portal.html"

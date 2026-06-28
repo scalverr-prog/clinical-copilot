@@ -20,6 +20,8 @@ class ClinicalContext:
     labs: dict = None
     diagnoses: list[str] = None
     allergies: list[str] = None
+    concerns: list[str] = None  # Clinical concerns needing attention
+    wound_info: dict = None  # Wound-specific data
     raw_text: str = ""
 
     def __post_init__(self):
@@ -33,6 +35,10 @@ class ClinicalContext:
             self.diagnoses = []
         if self.allergies is None:
             self.allergies = []
+        if self.concerns is None:
+            self.concerns = []
+        if self.wound_info is None:
+            self.wound_info = {}
 
     def has_clinical_data(self) -> bool:
         """Check if we actually found clinical data."""
@@ -42,7 +48,9 @@ class ClinicalContext:
             self.vitals or
             self.labs or
             self.diagnoses or
-            self.allergies
+            self.allergies or
+            self.concerns or
+            self.wound_info
         )
 
     def summary(self) -> str:
@@ -107,6 +115,10 @@ class ScreenMonitor:
     DX_PATTERNS = [
         r'(?:Diagnosis|Dx|ICD)[:\s]*([A-Z]\d{2,3}\.?\d{0,2})',
         r'\b(diabetes|hypertension|CHF|COPD|CKD|CAD|afib|DVT|PE)\b',
+        r'\b(T1DM|T2DM|DM1|DM2|type [12] diabetes)\b',
+        r'\b(DFU|diabetic foot ulcer|pressure ulcer|venous ulcer)\b',
+        r'\b(osteomyelitis|cellulitis|sepsis|SIRS)\b',
+        r'\b(E10\.\d+|E11\.\d+|L97\.\d+|L89\.\d+)\b',  # Diabetes and ulcer ICD codes
     ]
 
     # Allergy patterns
@@ -114,6 +126,24 @@ class ScreenMonitor:
         r'(?:Allergies?|NKDA)[:\s]*([A-Za-z,\s]+?)(?:\n|$)',
         r'(?:Allergic to)[:\s]*([A-Za-z,\s]+?)(?:\n|$)',
     ]
+
+    # Wound/procedure patterns
+    WOUND_PATTERNS = [
+        r'(?:wound|ulcer|DFU)[:\s]*(\d+\.?\d*)\s*(?:cm|mm|x)',
+        r'(?:necrotic|slough|granulation|epithelial)',
+        r'(?:debridement|I&D|wound care|dressing)',
+        r'(?:plantar|heel|toe|forefoot|midfoot)',
+    ]
+
+    # Clinical concern patterns that need deeper analysis
+    CONCERN_PATTERNS = {
+        'infection_risk': r'(?:fever|chills|erythema|purulent|malodor|warmth|swelling)',
+        'vascular_concern': r'(?:claudication|rest pain|ABI|pulse|ischemia|gangrene)',
+        'glycemic_issue': r'(?:hypoglycemia|hyperglycemia|DKA|HHS|glucose.*(?:high|low|\d{3,}))',
+        'anticoagulation': r'(?:warfarin|coumadin|INR|anticoag|bleeding|hematoma)',
+        'renal_concern': r'(?:creatinine|GFR|dialysis|nephro|kidney)',
+        'cardiac_concern': r'(?:chest pain|dyspnea|edema|BNP|troponin)',
+    }
 
     def __init__(self, screenpipe_url: str = "http://localhost:3030"):
         self.screenpipe_url = screenpipe_url
@@ -192,6 +222,19 @@ class ScreenMonitor:
                 if allergies.upper() != "NKDA":
                     context.allergies = [a.strip() for a in allergies.split(",")][:5]
                 break
+
+        # Extract wound info
+        for pattern in self.WOUND_PATTERNS:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                context.wound_info['present'] = True
+                if match.groups():
+                    context.wound_info['detail'] = match.group(0)
+
+        # Extract clinical concerns
+        for concern_name, pattern in self.CONCERN_PATTERNS.items():
+            if re.search(pattern, text, re.IGNORECASE):
+                context.concerns.append(concern_name)
 
         return context
 

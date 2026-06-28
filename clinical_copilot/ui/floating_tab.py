@@ -514,28 +514,37 @@ def take_screenshot():
 
 
 def ask_llm(prompt):
-    """Ask the local LLM."""
+    """Ask Clinical Insight (uses mistral:7b via Ollama)."""
     try:
         import urllib.request
         import json
 
+        # Create a conversation
+        conv_req = urllib.request.Request(
+            "http://localhost:8001/api/chat/new",
+            method="POST"
+        )
+        with urllib.request.urlopen(conv_req, timeout=10) as resp:
+            conv_data = json.loads(resp.read())
+            conv_id = conv_data.get("conversation_id")
+
+        # Send message to Clinical Insight
         data = json.dumps({
-            "model": "llama3:latest",
-            "prompt": prompt,
-            "stream": False
+            "conversation_id": conv_id,
+            "message": prompt
         }).encode()
 
         req = urllib.request.Request(
-            "http://localhost:11434/api/generate",
+            "http://localhost:8001/api/chat/message",
             data=data,
             headers={"Content-Type": "application/json"}
         )
 
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=180) as resp:
             result = json.loads(resp.read())
-            return result.get("response", "No response")[:500]
+            return result.get("response", "No response")
     except Exception as e:
-        return f"LLM Error: {e}"
+        return f"Clinical Insight Error: {e}"
 
 
 def check_component_health():
@@ -552,16 +561,19 @@ def check_component_health():
     except:
         health['screenpipe'] = False
 
+    # Check Clinical Insight (uses mistral:7b)
+    try:
+        req = urllib.request.urlopen("http://localhost:8001/health", timeout=2)
+        health['insight'] = True
+    except:
+        health['insight'] = False
+
     # Check Ollama
     try:
         req = urllib.request.urlopen("http://localhost:11434/api/tags", timeout=2)
         health['ollama'] = True
     except:
         health['ollama'] = False
-
-    # Check if copilot process is running
-    result = subprocess.run(["pgrep", "-f", "clinical_copilot.main"], capture_output=True)
-    health['copilot'] = result.returncode == 0
 
     return health
 
@@ -575,8 +587,8 @@ def update_status_display():
 
     components = [
         ('screenpipe', 'Screen'),
-        ('ollama', 'LLM'),
-        ('copilot', 'Copilot'),
+        ('insight', 'Insight'),
+        ('ollama', 'mistral:7b'),
     ]
 
     for key, label in components:
@@ -607,7 +619,7 @@ def create_status_bar():
     )
 
     # Create status labels
-    components = ['screenpipe', 'ollama', 'copilot']
+    components = ['screenpipe', 'insight', 'ollama']
     label_width = bar_width // 3
 
     for i, comp in enumerate(components):
@@ -783,48 +795,43 @@ def read_output():
 
 
 def start_copilot(delegate):
-    """Start copilot."""
+    """Start copilot with Clinical Insight."""
     state['is_on'] = True
     state['delegate'] = delegate
     set_btn_style(True)
     expand(delegate)
     clear_text()
-    append_text("Starting Clinical Copilot...\n", AppKit.NSColor.cyanColor())
 
-    # Start screenpipe
-    subprocess.run(["pkill", "-f", "screenpipe"], capture_output=True)
-    subprocess.Popen(["/usr/local/bin/screenpipe", "--fps", "1"],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    append_text("╔═══════════════════════════════════════════════════╗\n", AppKit.NSColor.cyanColor())
+    append_text("║        CLINICAL COPILOT + INSIGHT                 ║\n", AppKit.NSColor.cyanColor())
+    append_text("║        Using mistral:7b via Clinical Insight      ║\n", AppKit.NSColor.cyanColor())
+    append_text("╚═══════════════════════════════════════════════════╝\n", AppKit.NSColor.cyanColor())
+    append_text("\n", AppKit.NSColor.whiteColor())
+    append_text("Watching screen for clinical content...\n", AppKit.NSColor.greenColor())
+    append_text("Alerts will appear automatically.\n\n", AppKit.NSColor.whiteColor())
+    append_text("Commands:\n", AppKit.NSColor.yellowColor())
+    append_text("  'context' - show remembered data\n", AppKit.NSColor.whiteColor())
+    append_text("  'timeline' - patient history\n", AppKit.NSColor.whiteColor())
+    append_text("  'history <query>' - search history\n", AppKit.NSColor.whiteColor())
+    append_text("  'paste to note' - save to Notes\n", AppKit.NSColor.whiteColor())
+    append_text("  Any question about patient...\n\n", AppKit.NSColor.whiteColor())
 
-    # Start copilot process with unbuffered output
-    import os
-    env = os.environ.copy()
-    env['PYTHONUNBUFFERED'] = '1'
+    # Check Clinical Insight
+    try:
+        import urllib.request
+        req = urllib.request.urlopen("http://localhost:8001/health", timeout=3)
+        append_text("✓ Clinical Insight ready\n", AppKit.NSColor.greenColor())
+    except:
+        append_text("⚠ Clinical Insight not running\n", AppKit.NSColor.orangeColor())
+        append_text("  Run: ./start-copilot.sh\n", AppKit.NSColor.whiteColor())
 
-    state['process'] = subprocess.Popen(
-        ["python3", "-u", "-m", "clinical_copilot.main", "on"],
-        cwd=str(PROJECT_DIR),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        bufsize=1,
-        universal_newlines=True,
-        env=env
-    )
-
-    threading.Thread(target=read_output, daemon=True).start()
-    delegate.pollOutput()
+    # Start monitoring timer
+    delegate.startMonitoring()
 
 
 def stop_copilot():
     """Stop copilot."""
     append_text("\nStopping...\n", AppKit.NSColor.yellowColor())
-
-    if state['process']:
-        state['process'].terminate()
-        state['process'] = None
-
-    subprocess.run(["pkill", "-f", "clinical_copilot.main"], capture_output=True)
-    subprocess.run(["pkill", "-f", "screenpipe"], capture_output=True)
 
     state['is_on'] = False
     set_btn_style(False)
@@ -919,36 +926,100 @@ class AppDelegate(NSObject):
             threading.Thread(target=self.autoCapture, daemon=True).start()
 
     def autoCapture(self):
-        """Auto-capture screen content to context."""
+        """Auto-capture screen content and check for clinical alerts."""
         try:
             import urllib.request
             import json
 
             req = urllib.request.urlopen(
-                "http://localhost:3030/search?content_type=ocr&limit=1",
+                "http://localhost:3030/search?content_type=ocr&limit=5&min_length=20",
                 timeout=3
             )
             data = json.loads(req.read())
 
-            if data and len(data) > 0:
-                content = data[0].get("content", {}).get("text", "")
-                if content and len(content) > 50:
-                    # Only add if it looks clinical
-                    clinical_keywords = [
-                        'patient', 'diagnosis', 'medication', 'lab', 'vital',
-                        'mg', 'ml', 'assessment', 'plan', 'allergy', 'hx',
-                        'chief complaint', 'dx', 'rx', 'prn', 'bid', 'tid',
-                        'mrn', 'dob', 'admit'
-                    ]
-                    if any(kw in content.lower() for kw in clinical_keywords):
-                        change_msg = add_to_clinical_context(content, "auto")
-                        if change_msg:
-                            # Alert user of patient change on main thread
-                            AppHelper.callAfter(
-                                lambda: append_text(f"\n⚠️ {change_msg}\n", AppKit.NSColor.orangeColor())
-                            )
+            text_content = ""
+            if data and "data" in data:
+                for item in data.get("data", []):
+                    if "content" in item and "text" in item["content"]:
+                        text_content += item["content"]["text"] + "\n"
+
+            if text_content and len(text_content) > 50:
+                # Check for clinical keywords
+                clinical_keywords = [
+                    'patient', 'diagnosis', 'medication', 'lab', 'vital',
+                    'mg', 'ml', 'assessment', 'plan', 'allergy', 'hx',
+                    'chief complaint', 'dx', 'rx', 'prn', 'bid', 'tid',
+                    'mrn', 'dob', 'admit', 'potassium', 'sodium', 'glucose',
+                    'creatinine', 'inr', 'bp', 'heart rate', 'spo2'
+                ]
+                if any(kw in text_content.lower() for kw in clinical_keywords):
+                    change_msg = add_to_clinical_context(text_content, "auto")
+                    if change_msg:
+                        AppHelper.callAfter(
+                            lambda: append_text(f"\n⚠️ {change_msg}\n", AppKit.NSColor.orangeColor())
+                        )
+
+                    # Check for critical values
+                    alerts = self.check_critical_values(text_content)
+                    for alert in alerts:
+                        AppHelper.callAfter(
+                            lambda a=alert: self.display_alert(a)
+                        )
         except:
             pass
+
+    def check_critical_values(self, text):
+        """Check for critical lab/vital values."""
+        import re
+        alerts = []
+
+        # Critical patterns
+        patterns = {
+            'potassium_high': (r'(?:K\+?|Potassium)[:\s]*([6-9]\.\d|[6-9])', 'CRITICAL K+ > 6.0', 'red'),
+            'potassium_low': (r'(?:K\+?|Potassium)[:\s]*(2\.\d|[12]\.[0-9])', 'CRITICAL K+ < 3.0', 'red'),
+            'glucose_high': (r'(?:Glucose|BG)[:\s]*([4-9]\d{2}|\d{4})', 'HIGH GLUCOSE > 400', 'orange'),
+            'glucose_low': (r'(?:Glucose|BG)[:\s]*([1-5]\d|[1-6]0)(?!\d)', 'LOW GLUCOSE < 70', 'red'),
+            'creatinine_high': (r'(?:Creat|Creatinine)[:\s]*([3-9]\.\d{1,2}|[1-9]\d)', 'HIGH CREATININE', 'orange'),
+            'sodium_low': (r'(?:Na\+?|Sodium)[:\s]*(1[0-2]\d)', 'LOW SODIUM < 130', 'orange'),
+            'sodium_high': (r'(?:Na\+?|Sodium)[:\s]*(1[5-9]\d)', 'HIGH SODIUM > 150', 'orange'),
+            'inr_high': (r'(?:INR)[:\s]*([4-9]\.\d|[1-9]\d)', 'CRITICAL INR > 4.0', 'red'),
+            'bp_low': (r'(?:BP|Blood Pressure)[:\s]*([7-8]\d)/(\d+)', 'LOW BP < 90', 'orange'),
+            'hr_high': (r'(?:HR|Heart Rate)[:\s]*(1[3-9]\d|[2-9]\d{2})', 'TACHYCARDIA > 130', 'orange'),
+            'hr_low': (r'(?:HR|Heart Rate)[:\s]*([1-4]\d)(?!\d)', 'BRADYCARDIA < 50', 'orange'),
+            'spo2_low': (r'(?:SpO2|O2 Sat)[:\s]*([1-8]\d)%?', 'LOW SpO2 < 90%', 'red'),
+        }
+
+        for name, (pattern, msg, color) in patterns.items():
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                value = match.group(1)
+                alerts.append({
+                    'type': name,
+                    'message': f"{msg}: {value}",
+                    'color': color,
+                    'value': value
+                })
+
+        return alerts
+
+    def display_alert(self, alert):
+        """Display an alert in the terminal."""
+        color_map = {
+            'red': AppKit.NSColor.redColor(),
+            'orange': AppKit.NSColor.orangeColor(),
+            'yellow': AppKit.NSColor.yellowColor(),
+            'green': AppKit.NSColor.greenColor(),
+        }
+        color = color_map.get(alert['color'], AppKit.NSColor.whiteColor())
+
+        append_text("\n╔══════════════════════════════════════╗\n", color)
+        append_text(f"║ ⚠️  {alert['message']:<32} ║\n", color)
+        append_text("╚══════════════════════════════════════╝\n", color)
+
+    def startMonitoring(self):
+        """Start clinical monitoring."""
+        # Already handled by updateStatus_ timer calling autoCapture
+        append_text("Monitoring active...\n", AppKit.NSColor.greenColor())
 
     def checkHover_(self, timer):
         mouse = AppKit.NSEvent.mouseLocation()

@@ -231,15 +231,21 @@ class CopilotMenuBar(rumps.App):
             # Restore icon
             self.title = "🐧"
 
-            # Write a Python script to display formatted output
-            newline = "\n"
-            escaped_analysis = analysis.replace('"', "'")
+            # Write a Python script to display side-by-side output
+            import base64
+            note_b64 = base64.b64encode(note.encode()).decode()
+            analysis_b64 = base64.b64encode(analysis.encode()).decode()
+
             script = f'''
 import sys
+import base64
 sys.path.insert(0, "{self.PROJECT_DIR}")
-from clinical_copilot.main import display_analysis
-display_analysis("""{escaped_analysis}""", {processing_time})
-input("{newline}Press Enter to close...")
+from clinical_copilot.main import display_analysis_sidebyside
+
+note = base64.b64decode("{note_b64}").decode()
+analysis = base64.b64decode("{analysis_b64}").decode()
+display_analysis_sidebyside(note, analysis, {processing_time})
+input("\\nPress Enter to close...")
 '''
             # Save script to temp file
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:

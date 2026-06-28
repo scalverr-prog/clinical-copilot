@@ -52,7 +52,7 @@ class ScreenpipeClient:
         try:
             response = self._client.get(
                 f"{self.base_url}/search",
-                params={"content_type": "ocr", "limit": 10}
+                params={"content_type": "ocr", "limit": 30}
             )
             response.raise_for_status()
             data = response.json()
@@ -123,8 +123,9 @@ class ScreenpipeClient:
         """Get the most recent screen content, prioritizing clinical apps."""
         results = self.get_recent_screen(minutes=1)
 
-        # Skip Terminal/IDE to avoid capturing ourselves
-        skip_apps = {"Terminal", "iTerm2", "Code", "VS Code", "Cursor", "Control Center", "Dock"}
+        # Skip Terminal/IDE/system to avoid capturing ourselves
+        skip_apps = {"Terminal", "iTerm2", "Code", "VS Code", "Cursor", "Control Center",
+                     "Dock", "Notification Center", "SystemUIServer", "loginwindow"}
 
         # Prefer browser/clinical apps
         for result in results:

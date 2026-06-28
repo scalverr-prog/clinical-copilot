@@ -73,6 +73,47 @@ class ClinicalAnalyzer:
         r"(\d{2,3})\s*/\s*(\d{2,3})\s*(mmHg)?",  # 180/100 (standalone BP)
     ]
 
+    # Wound care and DFU patterns for clinical alerts
+    WOUND_CARE_PATTERNS = {
+        "dfu_with_pain": {
+            "pattern": r"(?i)(diabetic|DM|T1DM|T2DM|diabetes).{0,100}(ulcer|DFU|wound|foot).{0,100}(pain|ache|tender)",
+            "level": "warning",
+            "message": "DFU with pain - rule out infection/osteomyelitis",
+            "details": "Nocturnal or rest pain in diabetic foot ulcer may indicate deep infection, osteomyelitis, or ischemia. Consider: probe-to-bone test, inflammatory markers (WBC, ESR, CRP), X-ray or MRI for osteomyelitis."
+        },
+        "chronic_wound": {
+            "pattern": r"(?i)(chronic|non-?healing|present for \d+ (weeks|months)).{0,50}(ulcer|wound|DFU)",
+            "level": "suggestion",
+            "message": "Chronic wound - assess for healing barriers",
+            "details": "Chronic wounds require assessment of: vascular status (ABI), glycemic control (HbA1c), nutrition, offloading compliance, biofilm, and underlying osteomyelitis."
+        },
+        "plantar_ulcer": {
+            "pattern": r"(?i)plantar.{0,30}(ulcer|wound|DFU)",
+            "level": "warning",
+            "message": "Plantar ulcer - high osteomyelitis risk location",
+            "details": "Plantar ulcers over bony prominences have increased risk of osteomyelitis. Consider probe-to-bone test (positive if bone felt). If present >2 weeks or >2cm, MRI recommended."
+        },
+        "vitals_not_documented": {
+            "pattern": r"(?i)vitals.{0,20}(not documented|not (obtained|recorded|available))",
+            "level": "warning",
+            "message": "Vitals not documented - document or obtain",
+            "details": "Vital signs are essential for clinical assessment. Ensure BP, HR, temp are recorded. In wound patients, assess for signs of systemic infection."
+        },
+        "diabetes_wound": {
+            "pattern": r"(?i)(T1DM|T2DM|type [12] diabetes|diabetic|DM).{0,150}(ulcer|wound|foot)",
+            "level": "suggestion",
+            "message": "Diabetic wound - ensure HbA1c and vascular assessment",
+            "details": "DFU care requires: recent HbA1c (<3 months), vascular assessment (ABI, pulses), neuropathy assessment, appropriate offloading, and infection monitoring."
+        },
+        "infection_signs": {
+            # Must have POSITIVE infection signs, not "denies" or "no" before them
+            "pattern": r"(?i)(wound|ulcer|DFU).{0,50}(?<!deni)(?<!no )(?<!without )(has|with|shows?|present|noted|observed).{0,30}(drainage|purulent|erythema|cellulitis|malodor|fever)",
+            "level": "alert",
+            "message": "Wound infection signs - assess and treat",
+            "details": "Signs of wound infection require: wound culture (deep tissue preferred), inflammatory markers, imaging if osteomyelitis suspected, antibiotics based on severity."
+        }
+    }
+
     # Critical lab thresholds with clinical rationale and recommendations
     CRITICAL_LABS = {
         "potassium": {
@@ -348,10 +389,12 @@ class ClinicalAnalyzer:
                     vitals["sbp"] = sbp
                     vitals["dbp"] = dbp
 
-        # Heart rate
-        hr_match = re.search(r"(?i)(?:HR|heart rate|pulse)\s*[:\s]*(\d+)", text)
+        # Heart rate - must have label with colon/space, avoid matching ages like "45-yo"
+        hr_match = re.search(r"(?i)(?:HR|heart rate|pulse)\s*[:=]\s*(\d+)", text)
         if hr_match:
-            vitals["hr"] = float(hr_match.group(1))
+            val = float(hr_match.group(1))
+            if 30 <= val <= 250:  # Reasonable HR range
+                vitals["hr"] = val
 
         # Respiratory rate
         rr_match = re.search(r"(?i)(?:RR|resp|respiratory)\s*[:\s]*(\d+)", text)
@@ -363,10 +406,34 @@ class ClinicalAnalyzer:
         if temp_match:
             vitals["temp"] = float(temp_match.group(1))
 
-        # SpO2
+        # SpO2 - with label
         spo2_match = re.search(r"(?i)(?:SpO2|O2 sat|oxygen)\s*[:\s]*(\d+)", text)
         if spo2_match:
             vitals["spo2"] = float(spo2_match.group(1))
+        else:
+            # SpO2 - standalone percentage (common in EHR displays)
+            # Look for percentage values that could be SpO2 (typically 70-100%)
+            pct_matches = re.findall(r"(\d{2,3})%", text)
+            for pct in pct_matches:
+                val = float(pct)
+                if 50 <= val <= 100:  # Valid SpO2 range
+                    vitals["spo2"] = val
+                    break
+
+        # Also look for unlabeled HR (number between 40-200)
+        # Be very conservative - avoid matching ages like "45-yo"
+        if "hr" not in vitals:
+            # Only match numbers that are clearly vital signs context
+            # Exclude numbers followed by -yo, yo, y/o, year, yo male/female
+            hr_candidates = re.findall(r"(\d{2,3})(?![-\s]?y/?o|[-\s]?year|[-\s]?yo)", text)
+            for n in hr_candidates:
+                val = float(n)
+                if 50 <= val <= 200 and val not in [vitals.get("sbp"), vitals.get("dbp")]:
+                    # Must be in explicit vitals context (not just mention of "vitals")
+                    # Look for vitals section markers
+                    if re.search(r"(?i)vitals?\s*[:\[]", text):
+                        vitals["hr"] = val
+                        break
 
         return vitals
 
@@ -502,6 +569,28 @@ class ClinicalAnalyzer:
 
         return alerts
 
+    def _check_wound_care_patterns(self, text: str, source_app: str) -> list[ClinicalAlert]:
+        """Check for wound care and DFU-related patterns."""
+        alerts = []
+        now = datetime.now()
+
+        for name, config in self.WOUND_CARE_PATTERNS.items():
+            if re.search(config["pattern"], text):
+                level = AlertLevel.ALERT if config["level"] == "alert" else \
+                        AlertLevel.WARNING if config["level"] == "warning" else \
+                        AlertLevel.SUGGESTION
+                alerts.append(ClinicalAlert(
+                    level=level,
+                    message=config["message"],
+                    details=config["details"],
+                    timestamp=now,
+                    source_app=source_app,
+                    confidence=0.85,
+                    category="wound_care"
+                ))
+
+        return alerts
+
     def quick_check(self, content: ScreenContent) -> list[ClinicalAlert]:
         """INSTANT: Pattern-based checks only (no LLM). Returns in <10ms."""
         text = content.text_content
@@ -516,7 +605,10 @@ class ClinicalAnalyzer:
         vitals = self._extract_vitals(text)
         vital_alerts = self._check_critical_vitals(vitals, content.app_name)
 
-        return lab_alerts + vital_alerts
+        # Check wound care patterns
+        wound_alerts = self._check_wound_care_patterns(text, content.app_name)
+
+        return lab_alerts + vital_alerts + wound_alerts
 
     def analyze_with_llm(
         self,
