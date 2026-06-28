@@ -97,26 +97,28 @@ else
     fi
 fi
 
-# --- CLINICAL INSIGHT (optional - only if installed locally) ---
-CLINICAL_INSIGHT_DIR="$HOME/clinical-insight/backend"
-if [ -d "$CLINICAL_INSIGHT_DIR" ]; then
-    echo -n "Clinical Insight: "
-    if curl -s --connect-timeout 2 http://localhost:8001/health > /dev/null 2>&1; then
-        echo -e "${GREEN}running${NC}"
-    else
+# --- CLINICAL INSIGHT (bundled backend with vector DB) ---
+CLINICAL_INSIGHT_DIR="$SCRIPT_DIR/clinical_insight_backend"
+echo -n "Clinical Insight: "
+if curl -s --connect-timeout 2 http://localhost:8001/health > /dev/null 2>&1; then
+    echo -e "${GREEN}running${NC}"
+else
+    if [ -d "$CLINICAL_INSIGHT_DIR" ]; then
         echo -n "starting... "
         (
             cd "$CLINICAL_INSIGHT_DIR"
             if [ -f "venv/bin/activate" ]; then
                 source venv/bin/activate
-                uvicorn app.main:app --port 8001 > /tmp/clinical-insight.log 2>&1 &
             fi
+            python3 -m uvicorn app.main:app --port 8001 > /tmp/clinical-insight.log 2>&1 &
         )
         if wait_for_service "http://localhost:8001/health" "Clinical Insight" 10; then
             echo -e "${GREEN}ready${NC}"
         else
-            echo -e "${YELLOW}unavailable (optional)${NC}"
+            echo -e "${YELLOW}failed - check /tmp/clinical-insight.log${NC}"
         fi
+    else
+        echo -e "${RED}not found${NC}"
     fi
 fi
 

@@ -12,8 +12,9 @@ ClinicalCopilot is a terminal-based AI assistant that monitors your clinical wor
 - **Clinical Calculators** - GFR, MELD, Wells, CHA₂DS₂-VASc, and more
 - **Learning Memory** - Remembers patterns and adapts to your preferences
 - **Privacy Filters** - Excludes personal apps from monitoring
-- **Clinical Insight Integration** - Deep case analysis when needed
+- **Clinical Insight Backend** - Deep case analysis with vector DB (bundled)
 - **Note Critique Portal** - Web-based clinical note review and feedback
+- **Local Vector Database** - ChromaDB for RAG-based clinical knowledge
 
 ## Installation
 

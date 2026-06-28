@@ -87,14 +87,38 @@ else
     echo "  ✓ llama3:latest downloaded"
 fi
 
-# Install Python packages
+# Install Python packages (main copilot)
 echo ""
 if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
-    echo "Installing Python packages..."
+    echo "Installing Copilot Python packages..."
     pip3 install -r "$SCRIPT_DIR/requirements.txt"
-    echo "  ✓ Python packages installed"
-else
-    echo -e "${YELLOW}Note: requirements.txt not found, skipping Python packages${NC}"
+    echo "  ✓ Copilot packages installed"
+fi
+
+# Setup Clinical Insight backend (with vector DB)
+echo ""
+echo "Setting up Clinical Insight backend..."
+INSIGHT_DIR="$SCRIPT_DIR/clinical_insight_backend"
+if [ -d "$INSIGHT_DIR" ]; then
+    # Create virtual environment if not exists
+    if [ ! -d "$INSIGHT_DIR/venv" ]; then
+        python3 -m venv "$INSIGHT_DIR/venv"
+    fi
+    # Install requirements
+    source "$INSIGHT_DIR/venv/bin/activate"
+    pip install -r "$INSIGHT_DIR/requirements.txt" --quiet
+    deactivate
+    echo "  ✓ Clinical Insight packages installed"
+
+    # Setup .env if not exists
+    if [ ! -f "$INSIGHT_DIR/.env" ]; then
+        cp "$INSIGHT_DIR/.env.example" "$INSIGHT_DIR/.env"
+        echo ""
+        echo -e "${YELLOW}IMPORTANT: Configure your API key${NC}"
+        echo "Edit: $INSIGHT_DIR/.env"
+        echo "Add your Anthropic or OpenAI API key"
+        echo ""
+    fi
 fi
 
 # Create data directories
