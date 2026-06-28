@@ -256,7 +256,7 @@ def status():
     """Check system status."""
     import httpx
 
-    console.print("\n[bold]System Status:[/bold]\n")
+    console.print("\n[bold]System Health:[/bold]\n")
 
     # Check Screenpipe
     try:
