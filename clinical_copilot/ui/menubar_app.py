@@ -232,12 +232,14 @@ class CopilotMenuBar(rumps.App):
             self.title = "🐧"
 
             # Write a Python script to display formatted output
+            newline = "\n"
+            escaped_analysis = analysis.replace('"', "'")
             script = f'''
 import sys
 sys.path.insert(0, "{self.PROJECT_DIR}")
 from clinical_copilot.main import display_analysis
-display_analysis("""{analysis.replace('"', '\\"')}""", {processing_time})
-input("\\nPress Enter to close...")
+display_analysis("""{escaped_analysis}""", {processing_time})
+input("{newline}Press Enter to close...")
 '''
             # Save script to temp file
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
