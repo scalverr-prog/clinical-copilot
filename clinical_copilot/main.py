@@ -696,6 +696,89 @@ def preferences():
             console.print(f"  Categories: {', '.join(status['categories'])}")
 
 
+@cli.command()
+def submit():
+    """Submit a clinical note for analysis."""
+    import httpx
+
+    console.print("\n[bold cyan]╔══════════════════════════════════════════════════════════════════╗[/bold cyan]")
+    console.print("[bold cyan]║              📋 SUBMIT CLINICAL NOTE                             ║[/bold cyan]")
+    console.print("[bold cyan]╚══════════════════════════════════════════════════════════════════╝[/bold cyan]\n")
+
+    console.print("[dim]Paste your clinical note below. Press Enter twice when done.[/dim]\n")
+
+    # Collect multi-line input
+    lines = []
+    empty_count = 0
+    while True:
+        try:
+            line = input()
+            if line == "":
+                empty_count += 1
+                if empty_count >= 2:
+                    break
+                lines.append(line)
+            else:
+                empty_count = 0
+                lines.append(line)
+        except EOFError:
+            break
+
+    note = "\n".join(lines).strip()
+
+    if not note:
+        console.print("[yellow]No note provided.[/yellow]")
+        return
+
+    console.print(f"\n[dim]Note received ({len(note)} characters)[/dim]")
+    console.print("[bold yellow]Analyzing... (this may take 1-3 minutes)[/bold yellow]\n")
+
+    try:
+        import time
+        start_time = time.time()
+
+        # Create conversation
+        with httpx.Client(timeout=10.0) as client:
+            conv_resp = client.post("http://localhost:8001/api/chat/new")
+            conv_id = conv_resp.json().get("conversation_id")
+
+        # Send note for analysis
+        with httpx.Client(timeout=300.0) as client:
+            result = client.post(
+                "http://localhost:8001/api/chat/message",
+                json={
+                    "conversation_id": conv_id,
+                    "message": f"Review this clinical note for safety concerns, drug interactions, and gaps:\n\n{note}"
+                }
+            )
+            analysis = result.json().get("response", "No response")
+
+        processing_time = int(time.time() - start_time)
+
+        # Display formatted results
+        console.print("\n[bold cyan]╔══════════════════════════════════════════════════════════════════╗[/bold cyan]")
+        console.print("[bold cyan]║              🧠 CLINICAL INSIGHT ANALYSIS                        ║[/bold cyan]")
+        console.print(f"[bold cyan]║              Processing time: {processing_time}s                              ║[/bold cyan]")
+        console.print("[bold cyan]╚══════════════════════════════════════════════════════════════════╝[/bold cyan]\n")
+
+        # Format sections with colors
+        formatted = analysis
+        formatted = formatted.replace("**What I noticed:**", "\n[bold yellow]🔍 What I Noticed:[/bold yellow]")
+        formatted = formatted.replace("**How these connect:**", "\n[bold blue]🔗 How These Connect:[/bold blue]")
+        formatted = formatted.replace("**Why this matters:**", "\n[bold red]⚠️  Why This Matters:[/bold red]")
+        formatted = formatted.replace("**What the data doesn't answer:**", "\n[bold magenta]❓ Information Gaps:[/bold magenta]")
+        formatted = formatted.replace("**Recommendation:**", "\n[bold green]✅ Recommendation:[/bold green]")
+
+        console.print(formatted)
+        console.print("\n[dim]═══════════════════════════════════════════════════════════════════[/dim]\n")
+
+    except httpx.ConnectError:
+        console.print("[red]Error: Clinical Insight not running.[/red]")
+        console.print("[dim]Start with: ./start-copilot.sh[/dim]")
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+
+
 def main():
     """Main entry point."""
     cli()
