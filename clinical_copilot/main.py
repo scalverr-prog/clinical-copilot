@@ -126,47 +126,31 @@ def submit_note():
 
 
 def display_analysis(analysis: str, processing_time: int):
-    """Display analysis results with scrollable pager for long content."""
-    import subprocess
-    import tempfile
+    """Display analysis results with word wrapping."""
+    import textwrap
 
-    # Build the formatted output
-    lines = []
-    lines.append("")
-    lines.append("╔══════════════════════════════════════════════════════════════════╗")
-    lines.append(f"║  🧠 CLINICAL INSIGHT ANALYSIS ({processing_time}s)                          ║")
-    lines.append("╚══════════════════════════════════════════════════════════════════╝")
-    lines.append("")
+    console.print()
+    console.print("[bold cyan]╔══════════════════════════════════════════════════════════════════╗[/bold cyan]")
+    console.print(f"[bold cyan]║  🧠 CLINICAL INSIGHT ANALYSIS ({processing_time}s)                          ║[/bold cyan]")
+    console.print("[bold cyan]╚══════════════════════════════════════════════════════════════════╝[/bold cyan]")
+    console.print()
 
-    # Format sections with visual markers
+    # Format sections with visual markers and colors
     formatted = analysis
-    formatted = formatted.replace("**What I noticed:**", "\n🔍 WHAT I NOTICED:\n" + "─" * 50)
-    formatted = formatted.replace("**How these connect:**", "\n\n🔗 HOW THESE CONNECT:\n" + "─" * 50)
-    formatted = formatted.replace("**Why this matters:**", "\n\n⚠️  WHY THIS MATTERS:\n" + "─" * 50)
-    formatted = formatted.replace("**What the data doesn't answer:**", "\n\n❓ INFORMATION GAPS:\n" + "─" * 50)
-    formatted = formatted.replace("**Recommendation:**", "\n\n✅ RECOMMENDATION:\n" + "─" * 50)
 
-    lines.append(formatted)
-    lines.append("")
-    lines.append("═" * 70)
-    lines.append("[Press q to exit, arrow keys or space to scroll]")
-    lines.append("")
+    # Replace section headers with colored versions
+    formatted = formatted.replace("**What I noticed:**", "\n[bold yellow]🔍 WHAT I NOTICED:[/bold yellow]\n" + "─" * 50)
+    formatted = formatted.replace("**How these connect:**", "\n\n[bold blue]🔗 HOW THESE CONNECT:[/bold blue]\n" + "─" * 50)
+    formatted = formatted.replace("**Why this matters:**", "\n\n[bold red]⚠️  WHY THIS MATTERS:[/bold red]\n" + "─" * 50)
+    formatted = formatted.replace("**What the data doesn't answer:**", "\n\n[bold magenta]❓ INFORMATION GAPS:[/bold magenta]\n" + "─" * 50)
+    formatted = formatted.replace("**Recommendation:**", "\n\n[bold green]✅ RECOMMENDATION:[/bold green]\n" + "─" * 50)
 
-    full_output = "\n".join(lines)
-
-    # Use less pager for scrollable output
-    try:
-        # Write to temp file and use less
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-            f.write(full_output)
-            temp_path = f.name
-
-        # Use less with options: -R (raw/colors), -S (no wrap), -X (no clear)
-        subprocess.run(['less', '-R', '-X', temp_path])
-        os.unlink(temp_path)
-    except Exception:
-        # Fallback: just print directly
-        console.print(full_output)
+    # Print with word wrapping
+    console.print(formatted)
+    console.print()
+    console.print("[dim]═══════════════════════════════════════════════════════════════════[/dim]")
+    console.print("[dim]Scroll up in terminal to see full analysis (Cmd+↑ or scroll)[/dim]")
+    console.print()
 
 
 @cli.command()
