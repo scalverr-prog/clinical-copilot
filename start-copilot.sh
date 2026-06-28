@@ -42,9 +42,35 @@ find_screenpipe() {
     fi
 }
 
-# Kill old processes
+# Kill old menu bar (will restart fresh)
 pkill -f "menubar_app" 2>/dev/null || true
-pkill -f "screenpipe" 2>/dev/null || true
+
+# --- SCREENPIPE: Screen capture for clinical monitoring ---
+echo -n "Screenpipe: "
+if curl -s --connect-timeout 2 http://localhost:3030/health > /dev/null 2>&1; then
+    echo -e "${GREEN}running${NC}"
+else
+    SCREENPIPE_BIN=$(find_screenpipe)
+    if [ -z "$SCREENPIPE_BIN" ]; then
+        echo -e "${YELLOW}not installed (optional) - brew install mediar-ai/screenpipe/screenpipe${NC}"
+    else
+        # Kill zombie processes
+        if pgrep -x screenpipe > /dev/null 2>&1; then
+            pkill -9 screenpipe 2>/dev/null
+            pkill -9 -f "ffmpeg.*screenpipe" 2>/dev/null
+            sleep 1
+        fi
+
+        echo -n "starting... "
+        "$SCREENPIPE_BIN" --fps 1 > /tmp/screenpipe.log 2>&1 &
+
+        if wait_for_service "http://localhost:3030/health" "Screenpipe" 15; then
+            echo -e "${GREEN}ready${NC}"
+        else
+            echo -e "${YELLOW}failed - check /tmp/screenpipe.log${NC}"
+        fi
+    fi
+fi
 
 # --- OLLAMA ---
 echo -n "Ollama: "

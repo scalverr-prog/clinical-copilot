@@ -27,7 +27,11 @@ def start():
     console.print("[bold cyan]║              🐧 CLINICAL COPILOT                                 ║[/bold cyan]")
     console.print("[bold cyan]║              Finding what humans miss                            ║[/bold cyan]")
     console.print("[bold cyan]╚══════════════════════════════════════════════════════════════════╝[/bold cyan]")
-    console.print("\n[dim]Commands: [bold]submit[/bold] or [bold]s[/bold] = analyze a note   [bold]quit[/bold] or [bold]q[/bold] = exit[/dim]\n")
+    console.print("\n[dim]Commands:[/dim]")
+    console.print("[dim]  [bold]s[/bold] or [bold]submit[/bold]  = paste a note for analysis[/dim]")
+    console.print("[dim]  [bold]m[/bold] or [bold]monitor[/bold] = analyze what's on screen now[/dim]")
+    console.print("[dim]  [bold]w[/bold] or [bold]watch[/bold]   = continuous screen monitoring[/dim]")
+    console.print("[dim]  [bold]q[/bold] or [bold]quit[/bold]    = exit[/dim]\n")
 
     # Check Clinical Insight is running
     try:
@@ -54,10 +58,14 @@ def start():
                 break
             elif cmd in ["submit", "s"]:
                 submit_note()
+            elif cmd in ["monitor", "m"]:
+                analyze_screen_once()
+            elif cmd in ["watch", "w"]:
+                watch_screen()
             elif cmd == "":
                 continue
             else:
-                console.print("[dim]Commands: submit (s), quit (q)[/dim]")
+                console.print("[dim]Commands: submit (s), monitor (m), watch (w), quit (q)[/dim]")
 
         except (KeyboardInterrupt, EOFError):
             console.print("\n[dim]Goodbye![/dim]\n")
@@ -153,12 +161,113 @@ def display_analysis(analysis: str, processing_time: int):
     console.print()
 
 
+def analyze_screen_once():
+    """Analyze current screen content once."""
+    from .monitor.screen_monitor import ScreenMonitor
+
+    console.print("\n[bold cyan]═══ 👁️  ANALYZING SCREEN ═══[/bold cyan]")
+    console.print("[dim]Extracting clinical data from your screen...[/dim]\n")
+
+    monitor = ScreenMonitor()
+    context = monitor.check_for_clinical_content()
+
+    if not context:
+        console.print("[yellow]No clinical data detected on screen.[/yellow]")
+        console.print("[dim]Make sure you have a patient chart or clinical note visible.[/dim]\n")
+        return
+
+    console.print(f"[green]Found:[/green] {context.summary()}\n")
+
+    console.print("[dim]Analyzing with Clinical Insight...[/dim]")
+    console.print("[dim]This may take 1-2 minutes[/dim]\n")
+
+    start_time = time.time()
+    analysis = monitor.analyze_with_clinical_insight(context)
+    processing_time = int(time.time() - start_time)
+
+    if analysis:
+        display_analysis(analysis, processing_time)
+    else:
+        console.print("[red]Analysis failed[/red]\n")
+
+
+def watch_screen():
+    """Continuously watch screen for clinical content."""
+    from .monitor.screen_monitor import ScreenMonitor
+    import httpx
+
+    console.print("\n[bold cyan]═══ 👁️  WATCHING SCREEN ═══[/bold cyan]")
+    console.print("[dim]Monitoring for clinical content... Press Ctrl+C to stop[/dim]\n")
+
+    # Check Screenpipe
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.get("http://localhost:3030/health")
+            if resp.status_code != 200:
+                console.print("[red]Screenpipe not responding[/red]")
+                console.print("[dim]Run: ./start-copilot.sh[/dim]\n")
+                return
+    except:
+        console.print("[red]Screenpipe not running[/red]")
+        console.print("[dim]Run: ./start-copilot.sh[/dim]\n")
+        return
+
+    console.print("[green]✓ Screenpipe connected[/green]")
+    console.print("[dim]Watching for clinical data (checking every 10 seconds)...[/dim]\n")
+
+    monitor = ScreenMonitor()
+    last_mrn = None
+    check_count = 0
+
+    try:
+        while True:
+            check_count += 1
+            context = monitor.check_for_clinical_content()
+
+            if context and context.has_clinical_data():
+                # New patient or new significant data
+                if context.mrn != last_mrn:
+                    last_mrn = context.mrn
+                    console.print(f"\n[bold green]━━━ New patient data detected ━━━[/bold green]")
+                    console.print(f"[cyan]{context.summary()}[/cyan]")
+                    console.print("[dim]Analyzing...[/dim]")
+
+                    analysis = monitor.analyze_with_clinical_insight(context)
+                    if analysis:
+                        # Show brief alert, not full analysis
+                        lines = analysis.split('\n')[:10]
+                        for line in lines:
+                            if line.strip():
+                                console.print(f"  {line}")
+                        console.print("[dim]  ... (type 'm' for full analysis)[/dim]\n")
+
+            # Status indicator every 30 seconds
+            if check_count % 3 == 0:
+                console.print(f"[dim]... watching ({check_count * 10}s)[/dim]", end="\r")
+
+            time.sleep(10)
+
+    except KeyboardInterrupt:
+        console.print("\n[dim]Stopped watching.[/dim]\n")
+
+
 @cli.command()
 def status():
     """Check system status."""
     import httpx
 
     console.print("\n[bold]System Status:[/bold]\n")
+
+    # Check Screenpipe
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.get("http://localhost:3030/health")
+            if resp.status_code == 200:
+                console.print("[green]✓ Screenpipe[/green] - screen capture active")
+            else:
+                console.print("[yellow]○ Screenpipe[/yellow] - not responding")
+    except:
+        console.print("[yellow]○ Screenpipe[/yellow] - not running (screen monitoring disabled)")
 
     # Check Ollama
     try:
