@@ -201,12 +201,15 @@ def analyze_screen_once():
 
 
 def watch_screen():
-    """Continuously watch screen for clinical content."""
+    """Continuously watch screen for clinical content with formatted alerts."""
     from .monitor.screen_monitor import ScreenMonitor
+    from rich.panel import Panel
+    from rich.text import Text
+    from datetime import datetime
     import httpx
 
-    console.print("\n[bold cyan]═══ 👁️  WATCHING SCREEN ═══[/bold cyan]")
-    console.print("[dim]Monitoring for clinical content... Press Ctrl+C to stop[/dim]\n")
+    console.print("\n[bold cyan]═══ 👁️  CLINICAL MONITOR ═══[/bold cyan]")
+    console.print("[dim]Watching for clinical data... Press Ctrl+C to stop[/dim]\n")
 
     # Check Screenpipe
     try:
@@ -221,43 +224,81 @@ def watch_screen():
         console.print("[dim]Run: ./start-copilot.sh[/dim]\n")
         return
 
-    console.print("[green]✓ Screenpipe connected[/green]")
-    console.print("[dim]Watching for clinical data (checking every 10 seconds)...[/dim]\n")
+    console.print(Panel("[green]✓ Screen capture active[/green]\n[dim]Alerts will appear below as clinical data is detected...[/dim]",
+                       title="Monitor Status", border_style="green"))
 
     monitor = ScreenMonitor()
     last_mrn = None
-    check_count = 0
+    alert_count = 0
 
     try:
         while True:
-            check_count += 1
             context = monitor.check_for_clinical_content()
 
             if context and context.has_clinical_data():
-                # New patient or new significant data
-                if context.mrn != last_mrn:
-                    last_mrn = context.mrn
-                    console.print(f"\n[bold green]━━━ New patient data detected ━━━[/bold green]")
-                    console.print(f"[cyan]{context.summary()}[/cyan]")
-                    console.print("[dim]Analyzing...[/dim]")
+                time_str = datetime.now().strftime("%H:%M:%S")
 
+                # Patient change alert
+                if context.mrn and context.mrn != last_mrn:
+                    last_mrn = context.mrn
+                    alert_count += 1
+                    console.print(Panel(
+                        f"[bold]Patient: MRN {context.mrn}[/bold]",
+                        title=f"[!] PATIENT CHANGE [{time_str}]",
+                        title_align="left",
+                        border_style="yellow"
+                    ))
+
+                # Show extracted data
+                if context.medications:
+                    alert_count += 1
+                    meds_text = Text()
+                    meds_text.append("Medications detected:\n", style="bold")
+                    for med in context.medications[:5]:
+                        meds_text.append(f"  • {med}\n")
+                    console.print(Panel(meds_text, title=f"[i] INFO [{time_str}]", title_align="left", border_style="cyan"))
+
+                if context.vitals:
+                    alert_count += 1
+                    vitals_text = Text()
+                    vitals_text.append("Vitals:\n", style="bold")
+                    for k, v in context.vitals.items():
+                        vitals_text.append(f"  {k.upper()}: {v}\n")
+                    console.print(Panel(vitals_text, title=f"[i] VITALS [{time_str}]", title_align="left", border_style="blue"))
+
+                if context.labs:
+                    alert_count += 1
+                    labs_text = Text()
+                    labs_text.append("Lab values:\n", style="bold")
+                    for k, v in context.labs.items():
+                        labs_text.append(f"  {k}: {v}\n")
+                    console.print(Panel(labs_text, title=f"[i] LABS [{time_str}]", title_align="left", border_style="magenta"))
+
+                # Analyze for concerns if we have enough data
+                if len(context.medications) >= 2 or context.labs:
+                    console.print(Panel("[dim]Analyzing for clinical concerns...[/dim]", border_style="dim"))
                     analysis = monitor.analyze_with_clinical_insight(context)
                     if analysis:
-                        # Show brief alert, not full analysis
-                        lines = analysis.split('\n')[:10]
-                        for line in lines:
-                            if line.strip():
-                                console.print(f"  {line}")
-                        console.print("[dim]  ... (type 'm' for full analysis)[/dim]\n")
-
-            # Status indicator every 30 seconds
-            if check_count % 3 == 0:
-                console.print(f"[dim]... watching ({check_count * 10}s)[/dim]", end="\r")
+                        # Parse and display as formatted alerts
+                        if "interaction" in analysis.lower() or "concern" in analysis.lower() or "risk" in analysis.lower():
+                            console.print(Panel(
+                                analysis[:500],
+                                title=f"[*] WARNING [{time_str}]",
+                                title_align="left",
+                                border_style="red"
+                            ))
+                        else:
+                            console.print(Panel(
+                                analysis[:500],
+                                title=f"[>] INSIGHT [{time_str}]",
+                                title_align="left",
+                                border_style="green"
+                            ))
 
             time.sleep(10)
 
     except KeyboardInterrupt:
-        console.print("\n[dim]Stopped watching.[/dim]\n")
+        console.print(f"\n[dim]Stopped. {alert_count} alerts shown.[/dim]\n")
 
 
 @cli.command()
