@@ -124,13 +124,14 @@ class ScreenMonitor:
         """Get current screen text from Screenpipe."""
         try:
             with httpx.Client(timeout=5.0) as client:
-                # Get recent OCR content
+                # Get recent OCR content with minimum length to filter noise
                 resp = client.get(
                     f"{self.screenpipe_url}/search",
                     params={
                         "content_type": "ocr",
-                        "limit": 5,
+                        "limit": 10,
                         "offset": 0,
+                        "min_length": 20,
                     }
                 )
                 if resp.status_code == 200:
@@ -138,7 +139,9 @@ class ScreenMonitor:
                     texts = []
                     for item in data.get("data", []):
                         if "content" in item and "text" in item["content"]:
-                            texts.append(item["content"]["text"])
+                            text = item["content"]["text"]
+                            if text and len(text) > 10:
+                                texts.append(text)
                     return "\n".join(texts)
         except Exception as e:
             return None

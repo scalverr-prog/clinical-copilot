@@ -230,9 +230,19 @@ def watch_screen():
     monitor = ScreenMonitor()
     last_mrn = None
     alert_count = 0
+    check_count = 0
 
     try:
         while True:
+            check_count += 1
+
+            # Get raw screen text first
+            screen_text = monitor.get_screen_text()
+            if screen_text and check_count == 1:
+                # Show what we're seeing on first check
+                preview = screen_text[:150].replace('\n', ' ')
+                console.print(Panel(f"[dim]Screen: {preview}...[/dim]", border_style="dim"))
+
             context = monitor.check_for_clinical_content()
 
             if context and context.has_clinical_data():
