@@ -1,0 +1,18 @@
+# Core dependencies
+click>=8.0.0
+rich>=13.0.0
+httpx>=0.24.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# Local LLM
+ollama>=0.1.0
+
+# Menu bar app
+rumps>=0.4.0
+
+# RAG/Vector storage
+chromadb>=0.4.0
+
+# macOS integration
+pyobjc-framework-Cocoa>=9.0

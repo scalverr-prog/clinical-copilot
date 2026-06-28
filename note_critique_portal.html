@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clinical Note Critique Portal</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            text-align: center;
+            padding: 30px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 30px;
+        }
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #888;
+            font-size: 1.1rem;
+        }
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+        @media (max-width: 900px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+        .panel {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 25px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .panel h2 {
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            color: #00d9ff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .panel h2::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(180deg, #00d9ff, #00ff88);
+            border-radius: 2px;
+        }
+        textarea {
+            width: 100%;
+            height: 400px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 12px;
+            padding: 15px;
+            color: #e0e0e0;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            resize: vertical;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #00d9ff;
+            box-shadow: 0 0 0 3px rgba(0,217,255,0.1);
+        }
+        textarea::placeholder {
+            color: #666;
+        }
+        .btn-row {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        button {
+            padding: 14px 28px;
+            border-radius: 10px;
+            border: none;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #00d9ff, #00ff88);
+            color: #1a1a2e;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,217,255,0.3);
+        }
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: #e0e0e0;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        .results {
+            min-height: 400px;
+        }
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            color: #888;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(0,217,255,0.2);
+            border-top-color: #00d9ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            color: #666;
+            text-align: center;
+        }
+        .placeholder-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+        .analysis-section {
+            margin-bottom: 25px;
+        }
+        .section-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .critical { color: #ff4757; }
+        .warning { color: #ffa502; }
+        .info { color: #00d9ff; }
+        .success { color: #00ff88; }
+        .item-list {
+            list-style: none;
+        }
+        .item-list li {
+            padding: 12px 15px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border-left: 3px solid;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+        .item-list li.critical { border-color: #ff4757; }
+        .item-list li.warning { border-color: #ffa502; }
+        .item-list li.info { border-color: #00d9ff; }
+        .item-list li.success { border-color: #00ff88; }
+        .reasoning-text {
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            padding: 15px;
+            font-size: 0.95rem;
+            line-height: 1.7;
+            white-space: pre-wrap;
+        }
+        .error-message {
+            background: rgba(255,71,87,0.1);
+            border: 1px solid rgba(255,71,87,0.3);
+            border-radius: 12px;
+            padding: 20px;
+            color: #ff4757;
+            text-align: center;
+        }
+        .sample-cases {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .sample-cases h3 {
+            font-size: 0.9rem;
+            color: #888;
+            margin-bottom: 12px;
+        }
+        .sample-btns {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .sample-btn {
+            padding: 8px 14px;
+            font-size: 0.85rem;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 6px;
+            color: #aaa;
+        }
+        .sample-btn:hover {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+            font-size: 0.85rem;
+            color: #666;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #666;
+        }
+        .status-dot.connected { background: #00ff88; }
+        .status-dot.error { background: #ff4757; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Clinical Note Critique Portal</h1>
+            <p class="subtitle">Powered by Clinical Insight Engine</p>
+        </header>
+
+        <div class="main-content">
+            <div class="panel input-panel">
+                <h2>Clinical Note Input</h2>
+                <textarea id="noteInput" placeholder="Paste your clinical note here...
+
+Example:
+65 y/o male with PMH of HTN, DM2, CAD s/p PCI x2, presenting with 2 days of progressive dyspnea and lower extremity edema.
+
+Vitals: BP 168/95, HR 102, RR 22, SpO2 91% on RA, Temp 98.6F
+
+Labs: K 5.8, Cr 2.1 (baseline 1.2), BNP 1250, Troponin 0.08
+
+Meds: Lisinopril 40mg, Metoprolol 50mg BID, ASA 81mg, Atorvastatin 40mg, Metformin 1000mg BID
+
+Assessment: CHF exacerbation with AKI"></textarea>
+
+                <div class="btn-row">
+                    <button class="btn-primary" id="analyzeBtn" onclick="analyzeNote()">
+                        Analyze Note
+                    </button>
+                    <button class="btn-secondary" onclick="clearNote()">
+                        Clear
+                    </button>
+                </div>
+
+                <div class="sample-cases">
+                    <h3>Load Sample Case:</h3>
+                    <div class="sample-btns">
+                        <button class="sample-btn" onclick="loadSample('chf')">CHF Exacerbation</button>
+                        <button class="sample-btn" onclick="loadSample('sepsis')">Sepsis</button>
+                        <button class="sample-btn" onclick="loadSample('dka')">DKA</button>
+                        <button class="sample-btn" onclick="loadSample('chest_pain')">Chest Pain</button>
+                    </div>
+                </div>
+
+                <div class="status-bar">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="statusText">Checking connection...</span>
+                </div>
+            </div>
+
+            <div class="panel results-panel">
+                <h2>Analysis Results</h2>
+                <div class="results" id="resultsArea">
+                    <div class="placeholder">
+                        <div class="placeholder-icon">📋</div>
+                        <p>Paste a clinical note and click "Analyze Note"<br>to receive a comprehensive critique</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8001';
+
+        const SAMPLE_CASES = {
+            chf: `65 y/o male with PMH of HTN, DM2, CAD s/p PCI x2, presenting with 2 days of progressive dyspnea and lower extremity edema.
+
+Vitals: BP 168/95, HR 102, RR 22, SpO2 91% on RA, Temp 98.6F
+
+Labs:
+- K 5.8 mEq/L
+- Cr 2.1 (baseline 1.2)
+- BNP 1250 pg/mL
+- Troponin 0.08 ng/mL
+
+Current Medications:
+- Lisinopril 40mg daily
+- Metoprolol 50mg BID
+- ASA 81mg daily
+- Atorvastatin 40mg daily
+- Metformin 1000mg BID
+
+Physical Exam: JVD 10cm, bilateral crackles to mid-lung fields, 2+ pitting edema to knees
+
+Assessment: CHF exacerbation with AKI
+
+Plan: IV Lasix, hold lisinopril`,
+
+            sepsis: `78 y/o female from nursing home presenting with altered mental status and fever x1 day.
+
+PMH: Dementia, recurrent UTIs, DM2, HTN
+
+Vitals: BP 85/52, HR 118, RR 26, SpO2 94% on 2L NC, Temp 102.8F
+
+Labs:
+- WBC 18.5 K/uL
+- Lactate 4.2 mmol/L
+- Cr 1.8 (baseline 0.9)
+- Glucose 285 mg/dL
+- UA: Large LE, Nitrite+, >100 WBC
+
+Current Medications:
+- Metformin 500mg BID
+- Lisinopril 10mg daily
+- Donepezil 10mg daily
+
+Physical Exam: Confused, suprapubic tenderness, dry mucous membranes
+
+Assessment: Urosepsis with septic shock`,
+
+            dka: `32 y/o female with T1DM presenting with N/V x2 days, abdominal pain, and polyuria.
+
+PMH: T1DM diagnosed age 12, depression
+
+Vitals: BP 98/62, HR 112, RR 28 (Kussmaul), SpO2 99% RA, Temp 99.1F
+
+Labs:
+- Glucose 485 mg/dL
+- pH 7.18
+- HCO3 10 mEq/L
+- Anion gap 24
+- K 5.2 mEq/L
+- BUN 32, Cr 1.6
+- Beta-hydroxybutyrate 6.8 mmol/L
+
+Current Medications:
+- Insulin glargine 25 units QHS
+- Insulin lispro sliding scale
+- Sertraline 100mg daily
+
+Reports running out of insulin 3 days ago due to cost
+
+Assessment: DKA`,
+
+            chest_pain: `58 y/o male with PMH of HTN, hyperlipidemia, 40 pack-year smoking history presenting with substernal chest pressure x2 hours radiating to left arm.
+
+Vitals: BP 155/92, HR 88, RR 18, SpO2 98% RA
+
+ECG: 2mm ST elevation in V2-V4, reciprocal changes in II, III, aVF
+
+Labs:
+- Troponin 2.4 ng/mL (normal <0.04)
+- Cr 1.0 mg/dL
+- K 4.2 mEq/L
+
+Current Medications:
+- Amlodipine 10mg daily
+- Atorvastatin 20mg daily
+
+Pain 8/10, started at rest, associated with diaphoresis
+
+Assessment: STEMI`
+        };
+
+        // Check API connection on load
+        async function checkConnection() {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+
+            try {
+                const resp = await fetch(`${API_BASE}/health`, {
+                    method: 'GET',
+                    timeout: 3000
+                });
+                if (resp.ok) {
+                    dot.classList.add('connected');
+                    dot.classList.remove('error');
+                    text.textContent = 'Connected to Clinical Insight';
+                } else {
+                    throw new Error('Not healthy');
+                }
+            } catch (e) {
+                dot.classList.add('error');
+                dot.classList.remove('connected');
+                text.textContent = 'Clinical Insight not running (start with ./start-copilot.sh)';
+            }
+        }
+
+        async function analyzeNote() {
+            const note = document.getElementById('noteInput').value.trim();
+            if (!note) {
+                alert('Please enter a clinical note to analyze');
+                return;
+            }
+
+            const btn = document.getElementById('analyzeBtn');
+            const resultsArea = document.getElementById('resultsArea');
+
+            btn.disabled = true;
+            btn.textContent = 'Analyzing...';
+
+            resultsArea.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Analyzing clinical note...</p>
+                </div>
+            `;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/reasoning/analyze-freeform`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ narrative: note }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const analysis = await response.json();
+                displayResults(analysis);
+
+            } catch (error) {
+                resultsArea.innerHTML = `
+                    <div class="error-message">
+                        <p><strong>Analysis Failed</strong></p>
+                        <p>${error.message}</p>
+                        <p style="margin-top: 10px; font-size: 0.85rem;">
+                            Make sure Clinical Insight is running:<br>
+                            <code>cd clinical-copilot-package && ./start-copilot.sh</code>
+                        </p>
+                    </div>
+                `;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Analyze Note';
+            }
+        }
+
+        function displayResults(analysis) {
+            const resultsArea = document.getElementById('resultsArea');
+            let html = '';
+
+            // Critical Flags
+            if (analysis.critical_flags && analysis.critical_flags.length > 0) {
+                html += `
+                    <div class="analysis-section">
+                        <div class="section-title critical">🚨 Critical Flags</div>
+                        <ul class="item-list">
+                            ${analysis.critical_flags.map(flag =>
+                                `<li class="critical">${escapeHtml(flag)}</li>`
+                            ).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            // Pattern Breaks
+            if (analysis.pattern_breaks && analysis.pattern_breaks.length > 0) {
+                html += `
+                    <div class="analysis-section">
+                        <div class="section-title warning">⚠️ Pattern Breaks</div>
+                        <ul class="item-list">
+                            ${analysis.pattern_breaks.map(pb =>
+                                `<li class="warning">${escapeHtml(pb)}</li>`
+                            ).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            // Information Gaps
+            if (analysis.gaps && analysis.gaps.length > 0) {
+                html += `
+                    <div class="analysis-section">
+                        <div class="section-title info">📋 Information Gaps</div>
+                        <ul class="item-list">
+                            ${analysis.gaps.map(gap =>
+                                `<li class="info">${escapeHtml(gap)}</li>`
+                            ).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            // Decision Questions
+            if (analysis.decision_questions && analysis.decision_questions.length > 0) {
+                html += `
+                    <div class="analysis-section">
+                        <div class="section-title success">❓ Decision Questions</div>
+                        <ul class="item-list">
+                            ${analysis.decision_questions.map(q =>
+                                `<li class="success">${escapeHtml(q)}</li>`
+                            ).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            // Chain of Thought Reasoning
+            if (analysis.chain_of_thought) {
+                html += `
+                    <div class="analysis-section">
+                        <div class="section-title">🧠 Clinical Reasoning</div>
+                        <div class="reasoning-text">${escapeHtml(analysis.chain_of_thought)}</div>
+                    </div>
+                `;
+            }
+
+            // Summary
+            if (analysis.summary) {
+                html += `
+                    <div class="analysis-section">
+                        <div class="section-title">📝 Summary</div>
+                        <div class="reasoning-text">${escapeHtml(analysis.summary)}</div>
+                    </div>
+                `;
+            }
+
+            if (!html) {
+                html = `
+                    <div class="placeholder">
+                        <div class="placeholder-icon">✓</div>
+                        <p>No significant findings identified.<br>The clinical note appears complete.</p>
+                    </div>
+                `;
+            }
+
+            resultsArea.innerHTML = html;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function clearNote() {
+            document.getElementById('noteInput').value = '';
+            document.getElementById('resultsArea').innerHTML = `
+                <div class="placeholder">
+                    <div class="placeholder-icon">📋</div>
+                    <p>Paste a clinical note and click "Analyze Note"<br>to receive a comprehensive critique</p>
+                </div>
+            `;
+        }
+
+        function loadSample(caseType) {
+            document.getElementById('noteInput').value = SAMPLE_CASES[caseType] || '';
+        }
+
+        // Initialize
+        checkConnection();
+        setInterval(checkConnection, 30000);
+    </script>
+</body>
+</html>

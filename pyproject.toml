@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clinical-copilot"
+version = "1.0.0"
+description = "Real-time Clinical Decision Support for Healthcare Providers"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "scalver"}
+]
+keywords = ["clinical", "healthcare", "AI", "decision-support", "medical"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Healthcare Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+
+dependencies = [
+    "click>=8.0.0",
+    "rich>=13.0.0",
+    "httpx>=0.24.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "ollama>=0.1.0",
+    "rumps>=0.4.0",
+    "chromadb>=0.4.0",
+    "pyobjc-framework-Cocoa>=9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+copilot = "clinical_copilot.main:main"
+
+[project.urls]
+Homepage = "https://github.com/scalver/clinical-copilot"
+Documentation = "https://github.com/scalver/clinical-copilot#readme"
+Issues = "https://github.com/scalver/clinical-copilot/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["clinical_copilot*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
