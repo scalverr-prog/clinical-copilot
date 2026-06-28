@@ -77,14 +77,14 @@ ollama serve &>/dev/null &
 sleep 2
 echo "  ✓ Ollama service started"
 
-# Pull LLM model
+# Pull LLM models
 echo ""
-echo "Pulling llama3 model (this may take a while)..."
-if ollama list | grep -q "llama3:latest"; then
-    echo "  ✓ llama3:latest already downloaded"
+echo "Pulling mistral:7b model for Clinical Insight (this may take a while)..."
+if ollama list | grep -q "mistral:7b"; then
+    echo "  ✓ mistral:7b already downloaded"
 else
-    ollama pull llama3:latest
-    echo "  ✓ llama3:latest downloaded"
+    ollama pull mistral:7b
+    echo "  ✓ mistral:7b downloaded"
 fi
 
 # Install Python packages (main copilot)

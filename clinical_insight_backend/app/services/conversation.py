@@ -85,7 +85,7 @@ If you asked questions and the user didn't answer all of them, note which remain
                 "prompt": full_prompt,
                 "stream": False,
             }
-            with httpx.Client(timeout=120.0) as client:
+            with httpx.Client(timeout=300.0) as client:  # 5 min for Intel Mac
                 response = client.post(url, json=payload)
                 response.raise_for_status()
                 return response.json().get("response", "")
