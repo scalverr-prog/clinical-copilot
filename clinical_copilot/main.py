@@ -179,8 +179,30 @@ class ClinicalCopilot:
         poll_interval = 0.5  # Poll every 500ms for faster response
         last_content_hash = None
 
-        console.print("\n[bold green]✓ Copilot active - real-time monitoring[/bold green]")
-        console.print("[dim]Press Ctrl+C to stop[/dim]\n")
+        console.print("\n[bold cyan]╔══════════════════════════════════════════════════════════════════╗[/bold cyan]")
+        console.print("[bold cyan]║              🐧 CLINICAL COPILOT ACTIVE                          ║[/bold cyan]")
+        console.print("[bold cyan]╚══════════════════════════════════════════════════════════════════╝[/bold cyan]")
+        console.print("\n[bold green]✓ Real-time monitoring active[/bold green]")
+        console.print("[dim]Commands: [bold]s[/bold]=submit note  [bold]q[/bold]=quit[/dim]\n")
+
+        # Start keyboard listener in background
+        import threading
+        self._check_keyboard = True
+        def keyboard_listener():
+            import sys
+            import select
+            while self._check_keyboard and self._running:
+                # Check if input is available (non-blocking)
+                if select.select([sys.stdin], [], [], 0.5)[0]:
+                    try:
+                        cmd = sys.stdin.readline().strip().lower()
+                        if cmd == 's':
+                            self._submit_note_inline()
+                        elif cmd == 'q':
+                            self._running = False
+                    except:
+                        pass
+        threading.Thread(target=keyboard_listener, daemon=True).start()
 
         while self._running:
             try:
@@ -305,6 +327,81 @@ class ClinicalCopilot:
                 time.sleep(poll_interval)
 
         self._shutdown()
+
+    def _submit_note_inline(self):
+        """Submit a clinical note for analysis inline."""
+        import httpx
+
+        console.print("\n[bold cyan]╔══════════════════════════════════════════════════════════════════╗[/bold cyan]")
+        console.print("[bold cyan]║              📋 SUBMIT CLINICAL NOTE                             ║[/bold cyan]")
+        console.print("[bold cyan]╚══════════════════════════════════════════════════════════════════╝[/bold cyan]")
+        console.print("[dim]Paste note, press Enter twice when done:[/dim]\n")
+
+        # Collect multi-line input
+        lines = []
+        empty_count = 0
+        while True:
+            try:
+                line = input()
+                if line == "":
+                    empty_count += 1
+                    if empty_count >= 2:
+                        break
+                    lines.append(line)
+                else:
+                    empty_count = 0
+                    lines.append(line)
+            except EOFError:
+                break
+
+        note = "\n".join(lines).strip()
+
+        if not note:
+            console.print("[yellow]No note provided. Resuming monitoring...[/yellow]\n")
+            return
+
+        console.print(f"\n[dim]Analyzing ({len(note)} chars)... This may take 1-3 minutes[/dim]\n")
+
+        try:
+            start_time = time.time()
+
+            # Create conversation
+            with httpx.Client(timeout=10.0) as client:
+                conv_resp = client.post("http://localhost:8001/api/chat/new")
+                conv_id = conv_resp.json().get("conversation_id")
+
+            # Send note for analysis
+            with httpx.Client(timeout=300.0) as client:
+                result = client.post(
+                    "http://localhost:8001/api/chat/message",
+                    json={
+                        "conversation_id": conv_id,
+                        "message": f"Review this clinical note for safety concerns, drug interactions, and gaps:\n\n{note}"
+                    }
+                )
+                analysis = result.json().get("response", "No response")
+
+            processing_time = int(time.time() - start_time)
+
+            # Display formatted results
+            console.print(f"\n[bold cyan]═══ 🧠 CLINICAL INSIGHT ({processing_time}s) ═══[/bold cyan]\n")
+
+            # Format sections with colors
+            formatted = analysis
+            formatted = formatted.replace("**What I noticed:**", "[bold yellow]🔍 What I Noticed:[/bold yellow]")
+            formatted = formatted.replace("**How these connect:**", "[bold blue]🔗 How These Connect:[/bold blue]")
+            formatted = formatted.replace("**Why this matters:**", "[bold red]⚠️  Why This Matters:[/bold red]")
+            formatted = formatted.replace("**What the data doesn't answer:**", "[bold magenta]❓ Information Gaps:[/bold magenta]")
+            formatted = formatted.replace("**Recommendation:**", "[bold green]✅ Recommendation:[/bold green]")
+
+            console.print(formatted)
+            console.print("\n[dim]═══════════════════════════════════════════════════════════════════[/dim]")
+            console.print("[dim]Resuming monitoring... (s=submit, q=quit)[/dim]\n")
+
+        except httpx.ConnectError:
+            console.print("[red]Error: Clinical Insight not running.[/red]\n")
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]\n")
 
     def _handle_shutdown(self, signum, frame):
         """Handle shutdown signals."""
