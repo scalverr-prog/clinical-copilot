@@ -2,10 +2,13 @@
 
 import time
 import sys
+import os
 import click
 from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
 
-console = Console(force_terminal=True)
+console = Console(force_terminal=True, width=100)
 
 
 @click.group()
@@ -115,24 +118,55 @@ def submit_note():
 
         processing_time = int(time.time() - start_time)
 
-        # Display formatted results
-        console.print(f"[bold cyan]╔══════════════════════════════════════════════════════════════════╗[/bold cyan]")
-        console.print(f"[bold cyan]║  🧠 CLINICAL INSIGHT ANALYSIS ({processing_time}s)                          ║[/bold cyan]")
-        console.print(f"[bold cyan]╚══════════════════════════════════════════════════════════════════╝[/bold cyan]\n")
-
-        # Format sections with colors
-        formatted = analysis
-        formatted = formatted.replace("**What I noticed:**", "\n[bold yellow]🔍 WHAT I NOTICED:[/bold yellow]")
-        formatted = formatted.replace("**How these connect:**", "\n[bold blue]🔗 HOW THESE CONNECT:[/bold blue]")
-        formatted = formatted.replace("**Why this matters:**", "\n[bold red]⚠️  WHY THIS MATTERS:[/bold red]")
-        formatted = formatted.replace("**What the data doesn't answer:**", "\n[bold magenta]❓ INFORMATION GAPS:[/bold magenta]")
-        formatted = formatted.replace("**Recommendation:**", "\n[bold green]✅ RECOMMENDATION:[/bold green]")
-
-        console.print(formatted)
-        console.print("\n[dim]═══════════════════════════════════════════════════════════════════[/dim]\n")
+        # Display formatted results with pager for long content
+        display_analysis(analysis, processing_time)
 
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]\n")
+
+
+def display_analysis(analysis: str, processing_time: int):
+    """Display analysis results with scrollable pager for long content."""
+    import subprocess
+    import tempfile
+
+    # Build the formatted output
+    lines = []
+    lines.append("")
+    lines.append("╔══════════════════════════════════════════════════════════════════╗")
+    lines.append(f"║  🧠 CLINICAL INSIGHT ANALYSIS ({processing_time}s)                          ║")
+    lines.append("╚══════════════════════════════════════════════════════════════════╝")
+    lines.append("")
+
+    # Format sections with visual markers
+    formatted = analysis
+    formatted = formatted.replace("**What I noticed:**", "\n🔍 WHAT I NOTICED:\n" + "─" * 50)
+    formatted = formatted.replace("**How these connect:**", "\n\n🔗 HOW THESE CONNECT:\n" + "─" * 50)
+    formatted = formatted.replace("**Why this matters:**", "\n\n⚠️  WHY THIS MATTERS:\n" + "─" * 50)
+    formatted = formatted.replace("**What the data doesn't answer:**", "\n\n❓ INFORMATION GAPS:\n" + "─" * 50)
+    formatted = formatted.replace("**Recommendation:**", "\n\n✅ RECOMMENDATION:\n" + "─" * 50)
+
+    lines.append(formatted)
+    lines.append("")
+    lines.append("═" * 70)
+    lines.append("[Press q to exit, arrow keys or space to scroll]")
+    lines.append("")
+
+    full_output = "\n".join(lines)
+
+    # Use less pager for scrollable output
+    try:
+        # Write to temp file and use less
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            f.write(full_output)
+            temp_path = f.name
+
+        # Use less with options: -R (raw/colors), -S (no wrap), -X (no clear)
+        subprocess.run(['less', '-R', '-X', temp_path])
+        os.unlink(temp_path)
+    except Exception:
+        # Fallback: just print directly
+        console.print(full_output)
 
 
 @cli.command()
