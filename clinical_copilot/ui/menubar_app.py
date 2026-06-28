@@ -171,7 +171,7 @@ class CopilotMenuBar(rumps.App):
         """Open a window to submit a clinical note for analysis."""
         # Get note from user via clipboard or dialog
         window = rumps.Window(
-            message="Paste your clinical note below for analysis:",
+            message="Paste your clinical note below for analysis:\n\n(Analysis takes ~90 seconds on Intel Mac)",
             title="Submit Clinical Note",
             default_text="",
             ok="Analyze",
@@ -183,11 +183,14 @@ class CopilotMenuBar(rumps.App):
         if response.clicked and response.text.strip():
             note = response.text.strip()
 
+            # Update menu to show analyzing
+            self.title = "🐧⏳"
+
             # Show processing notification
             rumps.notification(
-                "Clinical Insight",
+                "Clinical Copilot",
                 "Analyzing note...",
-                "This may take 1-3 minutes"
+                f"Processing {len(note)} characters. Result will popup when ready (~90 sec)"
             )
 
             # Run analysis in background thread
@@ -199,8 +202,13 @@ class CopilotMenuBar(rumps.App):
 
     def _analyze_note(self, note: str):
         """Send note to Clinical Insight API and display results."""
+        import tempfile
+        import time as t
+
         try:
             import httpx
+
+            start_time = t.time()
 
             # Create conversation
             with httpx.Client(timeout=10.0) as client:
@@ -218,17 +226,34 @@ class CopilotMenuBar(rumps.App):
                 )
                 analysis = result.json().get("response", "No response")
 
-            # Show results in alert
-            # Truncate if too long for alert
-            display_text = analysis[:1500] + "..." if len(analysis) > 1500 else analysis
-            rumps.alert(
-                title="Clinical Insight Analysis",
-                message=display_text
-            )
+            processing_time = int(t.time() - start_time)
+
+            # Restore icon
+            self.title = "🐧"
+
+            # Write a Python script to display formatted output
+            script = f'''
+import sys
+sys.path.insert(0, "{self.PROJECT_DIR}")
+from clinical_copilot.main import display_analysis
+display_analysis("""{analysis.replace('"', '\\"')}""", {processing_time})
+input("\\nPress Enter to close...")
+'''
+            # Save script to temp file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+                f.write(script)
+                script_path = f.name
+
+            # Open Terminal with formatted output
+            cmd = f"python3 {script_path}"
+            applescript = f'tell application "Terminal" to do script "{cmd}"'
+            subprocess.run(["osascript", "-e", applescript])
+            subprocess.run(["osascript", "-e", 'tell application "Terminal" to activate'])
 
         except Exception as e:
+            self.title = "🐧"
             rumps.notification(
-                "Clinical Insight",
+                "Clinical Copilot",
                 "Analysis failed",
                 str(e)[:100]
             )
