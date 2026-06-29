@@ -221,17 +221,25 @@ class CopilotMenuBar(rumps.App):
         import tempfile
         import time as t
 
+        def log(msg):
+            with open("/tmp/copilot_debug.log", "a") as f:
+                f.write(f"{t.strftime('%H:%M:%S')} {msg}\n")
+
         try:
             import httpx
+            log("Starting analysis...")
 
             start_time = t.time()
 
             # Create conversation
+            log("Creating conversation...")
             with httpx.Client(timeout=10.0) as client:
                 conv_resp = client.post(f"{self.CLINICAL_INSIGHT_URL}/api/chat/new")
                 conv_id = conv_resp.json().get("conversation_id")
+            log(f"Conversation: {conv_id}")
 
             # Send note for analysis (longer timeout for inference)
+            log("Sending note for analysis...")
             with httpx.Client(timeout=300.0) as client:
                 result = client.post(
                     f"{self.CLINICAL_INSIGHT_URL}/api/chat/message",
@@ -241,8 +249,10 @@ class CopilotMenuBar(rumps.App):
                     }
                 )
                 analysis = result.json().get("response", "No response")
+            log(f"Got response: {len(analysis)} chars")
 
             processing_time = int(t.time() - start_time)
+            log(f"Processing time: {processing_time}s")
 
             # Stop animation and restore icon
             self._animating = False
@@ -252,6 +262,7 @@ class CopilotMenuBar(rumps.App):
             import base64
             note_b64 = base64.b64encode(note.encode()).decode()
             analysis_b64 = base64.b64encode(analysis.encode()).decode()
+            log("Encoded note and analysis")
 
             script = f'''#!/usr/bin/env python3
 import sys
@@ -268,26 +279,41 @@ input("\\nPress Enter to close...")
             script_path = "/tmp/copilot_analysis.py"
             with open(script_path, 'w') as f:
                 f.write(script)
+            log(f"Script saved to {script_path}")
 
-            # Send notification that analysis is complete
+            # Send notification with sound
+            log("Sending notification...")
             rumps.notification(
                 "🐧 Clinical Copilot",
                 f"✅ Analysis complete! ({processing_time}s)",
-                "🐧 Results ready - opening Terminal..."
+                "🐧 Results ready - opening Terminal...",
+                sound=True
             )
 
-            # Open Terminal with formatted output
+            # Play alert sound for extra attention
+            subprocess.run(["afplay", "/System/Library/Sounds/Glass.aiff"])
+
+            # Open Terminal with formatted output and bring to front
+            log("Opening Terminal...")
             cmd = f"cd /Users/scalver/clinical-copilot-package && python3 {script_path}"
             applescript = f'tell application "Terminal" to do script "{cmd}"'
             subprocess.run(["osascript", "-e", applescript])
-            subprocess.run(["osascript", "-e", 'tell application "Terminal" to activate'])
+            # Bring Terminal to front aggressively
+            subprocess.run(["osascript", "-e", '''
+                tell application "Terminal"
+                    activate
+                    set frontmost to true
+                end tell
+            '''])
+            log("Done!")
 
         except Exception as e:
+            log(f"ERROR: {e}")
             self._animating = False
             self.title = "🐧"
             rumps.notification(
-                "Clinical Copilot",
-                "Analysis failed",
+                "🐧 Clinical Copilot",
+                "❌ Analysis failed",
                 str(e)[:100]
             )
 
