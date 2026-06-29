@@ -6,10 +6,20 @@ import httpx
 import re
 import subprocess
 import os
+import signal
+import sys
 from rich.console import Console
 from rich.panel import Panel
 
 console = Console()
+
+# Exit cleanly when Terminal window is closed
+def handle_exit(signum, frame):
+    console.print("\n[dim]Monitor stopped.[/dim]")
+    sys.exit(0)
+
+signal.signal(signal.SIGHUP, handle_exit)  # Terminal closed
+signal.signal(signal.SIGTERM, handle_exit)  # Kill signal
 
 # Track last restart attempts to prevent spam
 _last_screenpipe_restart = 0

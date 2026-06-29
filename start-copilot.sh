@@ -138,10 +138,11 @@ fi
 nohup python3 "$SCRIPT_DIR/service_watchdog.py" > /tmp/watchdog.log 2>&1 &
 
 # --- CLINICAL MONITOR (Terminal popup with Rich formatting - auto-starts) ---
+# Use exec so closing Terminal window stops the monitor
 osascript -e "
 tell application \"Terminal\"
     activate
-    do script \"cd '$SCRIPT_DIR' && python3 simple_monitor.py\"
+    do script \"cd '$SCRIPT_DIR' && exec python3 simple_monitor.py\"
 end tell
 "
 
