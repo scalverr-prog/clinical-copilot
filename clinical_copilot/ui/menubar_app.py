@@ -272,8 +272,8 @@ input("\\nPress Enter to close...")
             # Send notification that analysis is complete
             rumps.notification(
                 "🐧 Clinical Copilot",
-                f"Analysis complete ({processing_time}s)",
-                "Click to view results in Terminal"
+                f"✅ Analysis complete! ({processing_time}s)",
+                "🐧 Results ready - opening Terminal..."
             )
 
             # Open Terminal with formatted output
