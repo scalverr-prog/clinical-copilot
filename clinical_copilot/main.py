@@ -184,57 +184,46 @@ def display_analysis(analysis: str, processing_time: int):
 
 
 def display_analysis_sidebyside(note: str, analysis: str, processing_time: int):
-    """Display original note and analysis - simple text format."""
+    """Display analysis results only."""
     import subprocess
     from pathlib import Path
     from datetime import datetime
 
-    # Simple clear output - no fancy boxes
     print()
     print("=" * 70)
-    print(f"  🐧 CLINICAL COPILOT ANALYSIS ({processing_time}s)")
+    print(f"  🐧 CLINICAL ANALYSIS ({processing_time}s)")
     print("=" * 70)
     print()
 
-    # Original note
-    print("-" * 70)
-    print("📋 ORIGINAL NOTE")
-    print("-" * 70)
-    print(note)
-    print()
-
-    # Analysis
-    print("-" * 70)
-    print("🔍 ANALYSIS & RECOMMENDATIONS")
-    print("-" * 70)
-    # Clean up markdown formatting
+    # Analysis only - with color-like formatting
     for line in analysis.split('\n'):
         clean_line = line.replace("**", "").replace("*", "")
-        if clean_line.strip().startswith("-"):
-            print(f"  {clean_line.strip()}")
+        upper = clean_line.upper()
+
+        # Highlight critical items
+        if any(w in upper for w in ['CONTRADICTION', 'ERROR', 'WRONG', 'INCORRECT']):
+            print(f"  ❌ {clean_line.strip()}")
+        elif any(w in upper for w in ['MISSING', 'NOT DOCUMENTED', 'OVERLOOKED']):
+            print(f"  ⚠️  {clean_line.strip()}")
+        elif any(w in upper for w in ['DOESN\'T FIT', 'INCONSISTENT', 'DOESN\'T MATCH']):
+            print(f"  🔴 {clean_line.strip()}")
+        elif clean_line.strip().startswith("-"):
+            print(f"    • {clean_line.strip()[1:].strip()}")
         elif clean_line.strip() and clean_line.strip().isupper():
-            print(f"\n{clean_line}")
-        elif ":" in clean_line and clean_line.split(":")[0].strip().isupper():
-            print(f"\n{clean_line}")
+            print(f"\n  [{clean_line.strip()}]")
+        elif ":" in clean_line and len(clean_line.split(":")[0]) < 20:
+            print(f"\n  {clean_line}")
         else:
-            print(clean_line)
+            print(f"  {clean_line}")
+
     print()
     print("=" * 70)
     print()
 
-    # Create full text for copy/save
-    full_text = f"""CLINICAL COPILOT ANALYSIS
+    # Create full text for copy/save (analysis only)
+    full_text = f"""CLINICAL ANALYSIS
 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-Processing time: {processing_time}s
 
-{'=' * 50}
-ORIGINAL NOTE
-{'=' * 50}
-{note}
-
-{'=' * 50}
-ANALYSIS & RECOMMENDATIONS
-{'=' * 50}
 {analysis}
 """
 
