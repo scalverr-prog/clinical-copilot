@@ -83,6 +83,62 @@ def get_screen_text():
         console.print(f"[red]Screenpipe error: {e}[/red]")
     return None, None
 
+def get_clinical_interpretation(text, findings):
+    """Send to Clinical Insight for LLM analysis and interpretation."""
+    try:
+        # Quick health check first
+        try:
+            httpx.get("http://localhost:8001/health", timeout=2.0)
+        except:
+            return None
+
+        # Format the findings into a clinical prompt
+        findings_summary = []
+        for key, value in findings.items():
+            if key == "CONCERNS":
+                findings_summary.append(f"⚠️ CONCERNS: {', '.join(value)}")
+            else:
+                findings_summary.append(f"• {key}: {value}")
+
+        prompt = f"""You are a clinical reviewer. Critically analyze this note - DO NOT summarize or recite what's written. Instead:
+
+CLINICAL DATA:
+{chr(10).join(findings_summary)}
+
+TEXT:
+{text[:2000]}
+
+Provide ONLY:
+
+1. MISSING DATA - What critical info is NOT documented that should be?
+   (e.g., missing labs, undocumented exam findings, no allergy check)
+
+2. RED FLAGS - Does anything not make sense or seem inconsistent?
+   (e.g., vitals don't match diagnosis, meds contraindicated, illogical plan)
+
+3. QUESTIONS TO ASK - What should the clinician verify or reconsider?
+
+Be brief, direct, skeptical. Challenge the note. If everything looks appropriate, say so in one line."""
+
+        # Create conversation
+        resp = httpx.post("http://localhost:8001/api/chat/new", timeout=10.0)
+        if resp.status_code != 200:
+            return None
+        conv_id = resp.json().get("conversation_id")
+
+        # Get interpretation (longer timeout for LLM)
+        result = httpx.post(
+            "http://localhost:8001/api/chat/message",
+            json={"conversation_id": conv_id, "message": prompt},
+            timeout=60.0
+        )
+        if result.status_code == 200:
+            return result.json().get("response")
+    except Exception as e:
+        console.print(f"[dim]  (Interpretation unavailable: {e})[/dim]")
+    return None
+
+
 def extract_clinical_data(text):
     """Extract critical clinical data points."""
     findings = {}
@@ -271,15 +327,30 @@ def main():
                 findings = extract_clinical_data(text)
 
                 if findings:
-                    console.print("[bold cyan]── EXTRACTED DATA ──[/bold cyan]")
-                    for key, value in findings.items():
-                        if key == "CONCERNS":
-                            console.print(f"[bold red]⚠️ {key}: {value}[/bold red]")
-                        else:
-                            console.print(f"  {key}: {value}")
-                    console.print()
+                    # Show brief extracted data
+                    console.print("[bold cyan]── CLINICAL DATA ──[/bold cyan]")
+                    if 'CONCERNS' in findings:
+                        console.print(f"[bold red]⚠️ CONCERNS: {findings['CONCERNS']}[/bold red]")
+                    if 'Vitals' in findings:
+                        console.print(f"  Vitals: {findings['Vitals']}")
+                    if 'Diagnoses' in findings:
+                        console.print(f"  Diagnoses: {findings['Diagnoses']}")
+
+                    # Get LLM interpretation
+                    console.print("[dim]  Analyzing...[/dim]")
+                    interpretation = get_clinical_interpretation(text, findings)
+
+                    if interpretation:
+                        console.print("[bold yellow]── CLINICAL REVIEW ──[/bold yellow]")
+                        # Format interpretation nicely
+                        for line in interpretation.split('\n'):
+                            if line.strip():
+                                console.print(f"  {line}")
+                        console.print()
+                    else:
+                        console.print("[dim]  (LLM interpretation unavailable)[/dim]\n")
                 else:
-                    console.print("[dim]  (No clinical data extracted)[/dim]")
+                    console.print("[dim]  (No clinical data found)[/dim]")
 
             time.sleep(1)
 
