@@ -273,7 +273,6 @@ from clinical_copilot.main import display_analysis_sidebyside
 note = base64.b64decode("{note_b64}").decode()
 analysis = base64.b64decode("{analysis_b64}").decode()
 display_analysis_sidebyside(note, analysis, {processing_time})
-input("\\nPress Enter to close...")
 '''
             # Save script to fixed location (avoids temp file issues)
             script_path = "/tmp/copilot_analysis.py"

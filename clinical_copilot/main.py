@@ -187,6 +187,9 @@ def display_analysis_sidebyside(note: str, analysis: str, processing_time: int):
     """Display original note and analysis in stacked panels."""
     from rich.panel import Panel
     from rich.markdown import Markdown
+    import subprocess
+    from pathlib import Path
+    from datetime import datetime
 
     console.print()
     console.print(f"[bold cyan]{'═' * 60}[/bold cyan]")
@@ -225,7 +228,47 @@ def display_analysis_sidebyside(note: str, analysis: str, processing_time: int):
     ))
 
     console.print()
-    console.print("[dim]Scroll up to see full analysis[/dim]")
+
+    # Create full text for copy/save
+    full_text = f"""CLINICAL COPILOT ANALYSIS
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Processing time: {processing_time}s
+
+{'=' * 50}
+ORIGINAL NOTE
+{'=' * 50}
+{note}
+
+{'=' * 50}
+ANALYSIS & RECOMMENDATIONS
+{'=' * 50}
+{analysis}
+"""
+
+    # Options menu
+    console.print("[bold]Options:[/bold]")
+    console.print("  [cyan]c[/cyan] = Copy to clipboard")
+    console.print("  [cyan]s[/cyan] = Save to archive")
+    console.print("  [cyan]Enter[/cyan] = Close")
+    console.print()
+
+    choice = input("Choice: ").strip().lower()
+
+    if choice == 'c':
+        # Copy to clipboard using pbcopy (macOS)
+        process = subprocess.Popen(['pbcopy'], stdin=subprocess.PIPE)
+        process.communicate(full_text.encode('utf-8'))
+        console.print("[green]✓ Copied to clipboard![/green]")
+
+    elif choice == 's':
+        # Save to archive
+        archive_dir = Path.home() / ".clinical-copilot" / "archive"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = archive_dir / f"analysis_{timestamp}.txt"
+        filename.write_text(full_text)
+        console.print(f"[green]✓ Saved to {filename}[/green]")
+
     console.print()
 
 
