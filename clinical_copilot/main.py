@@ -184,60 +184,48 @@ def display_analysis(analysis: str, processing_time: int):
 
 
 def display_analysis_sidebyside(note: str, analysis: str, processing_time: int):
-    """Display original note and analysis side by side."""
-    from rich.table import Table
-    from rich.text import Text
+    """Display original note and analysis in stacked panels."""
+    from rich.panel import Panel
+    from rich.markdown import Markdown
 
     console.print()
-    console.print(f"[bold cyan]═══ CLINICAL INSIGHT ANALYSIS ({processing_time}s) ═══[/bold cyan]")
+    console.print(f"[bold cyan]{'═' * 60}[/bold cyan]")
+    console.print(f"[bold cyan]  🐧 CLINICAL COPILOT ANALYSIS ({processing_time}s)[/bold cyan]")
+    console.print(f"[bold cyan]{'═' * 60}[/bold cyan]")
     console.print()
 
-    # Create side-by-side table
-    table = Table(show_header=True, header_style="bold", expand=True, box=None)
-    table.add_column("ORIGINAL NOTE", style="white", width=45)
-    table.add_column("│", style="dim", width=1, justify="center")
-    table.add_column("ANALYSIS & FEEDBACK", style="cyan", width=45)
+    # Show original note
+    console.print(Panel(
+        note,
+        title="[bold white]📋 ORIGINAL NOTE[/bold white]",
+        border_style="white",
+        padding=(1, 2)
+    ))
 
-    # Wrap text for columns
-    def wrap_text(text, width=42):
-        lines = []
-        for paragraph in text.split('\n'):
-            if not paragraph.strip():
-                lines.append("")
-                continue
-            words = paragraph.split()
-            current = ""
-            for word in words:
-                if len(current) + len(word) + 1 <= width:
-                    current += word + " "
-                else:
-                    if current:
-                        lines.append(current.rstrip())
-                    current = word + " "
-            if current:
-                lines.append(current.rstrip())
-        return lines
-
-    note_lines = wrap_text(note)
-    analysis_lines = wrap_text(analysis)
-
-    # Pad to same length
-    max_lines = max(len(note_lines), len(analysis_lines))
-    while len(note_lines) < max_lines:
-        note_lines.append("")
-    while len(analysis_lines) < max_lines:
-        analysis_lines.append("")
-
-    # Add rows
-    for i, (note_line, analysis_line) in enumerate(zip(note_lines, analysis_lines)):
-        # Highlight analysis headers
-        if analysis_line.startswith("**") or analysis_line.startswith("STEP") or analysis_line.upper() == analysis_line and len(analysis_line) > 3:
-            analysis_line = f"[bold yellow]{analysis_line.replace('**', '')}[/bold yellow]"
-        table.add_row(note_line, "│", analysis_line)
-
-    console.print(table)
     console.print()
-    console.print("[dim]Scroll up to see full comparison[/dim]")
+
+    # Format analysis with highlighted sections
+    formatted_analysis = ""
+    for line in analysis.split('\n'):
+        if line.startswith("**") or (line.upper() == line and len(line.strip()) > 3 and line.strip().endswith(":")):
+            # Section header
+            clean = line.replace("**", "").strip()
+            formatted_analysis += f"[bold yellow]{clean}[/bold yellow]\n"
+        elif line.strip().startswith("-") or line.strip().startswith("•"):
+            # Bullet point
+            formatted_analysis += f"[cyan]{line}[/cyan]\n"
+        else:
+            formatted_analysis += f"{line}\n"
+
+    console.print(Panel(
+        formatted_analysis.strip(),
+        title="[bold cyan]🔍 ANALYSIS & RECOMMENDATIONS[/bold cyan]",
+        border_style="cyan",
+        padding=(1, 2)
+    ))
+
+    console.print()
+    console.print("[dim]Scroll up to see full analysis[/dim]")
     console.print()
 
 
