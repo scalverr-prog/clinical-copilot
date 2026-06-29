@@ -184,50 +184,43 @@ def display_analysis(analysis: str, processing_time: int):
 
 
 def display_analysis_sidebyside(note: str, analysis: str, processing_time: int):
-    """Display original note and analysis in stacked panels."""
-    from rich.panel import Panel
-    from rich.markdown import Markdown
+    """Display original note and analysis - simple text format."""
     import subprocess
     from pathlib import Path
     from datetime import datetime
 
-    console.print()
-    console.print(f"[bold cyan]{'═' * 60}[/bold cyan]")
-    console.print(f"[bold cyan]  🐧 CLINICAL COPILOT ANALYSIS ({processing_time}s)[/bold cyan]")
-    console.print(f"[bold cyan]{'═' * 60}[/bold cyan]")
-    console.print()
+    # Simple clear output - no fancy boxes
+    print()
+    print("=" * 70)
+    print(f"  🐧 CLINICAL COPILOT ANALYSIS ({processing_time}s)")
+    print("=" * 70)
+    print()
 
-    # Show original note
-    console.print(Panel(
-        note,
-        title="[bold white]📋 ORIGINAL NOTE[/bold white]",
-        border_style="white",
-        padding=(1, 2)
-    ))
+    # Original note
+    print("-" * 70)
+    print("📋 ORIGINAL NOTE")
+    print("-" * 70)
+    print(note)
+    print()
 
-    console.print()
-
-    # Format analysis with highlighted sections
-    formatted_analysis = ""
+    # Analysis
+    print("-" * 70)
+    print("🔍 ANALYSIS & RECOMMENDATIONS")
+    print("-" * 70)
+    # Clean up markdown formatting
     for line in analysis.split('\n'):
-        if line.startswith("**") or (line.upper() == line and len(line.strip()) > 3 and line.strip().endswith(":")):
-            # Section header
-            clean = line.replace("**", "").strip()
-            formatted_analysis += f"[bold yellow]{clean}[/bold yellow]\n"
-        elif line.strip().startswith("-") or line.strip().startswith("•"):
-            # Bullet point
-            formatted_analysis += f"[cyan]{line}[/cyan]\n"
+        clean_line = line.replace("**", "").replace("*", "")
+        if clean_line.strip().startswith("-"):
+            print(f"  {clean_line.strip()}")
+        elif clean_line.strip() and clean_line.strip().isupper():
+            print(f"\n{clean_line}")
+        elif ":" in clean_line and clean_line.split(":")[0].strip().isupper():
+            print(f"\n{clean_line}")
         else:
-            formatted_analysis += f"{line}\n"
-
-    console.print(Panel(
-        formatted_analysis.strip(),
-        title="[bold cyan]🔍 ANALYSIS & RECOMMENDATIONS[/bold cyan]",
-        border_style="cyan",
-        padding=(1, 2)
-    ))
-
-    console.print()
+            print(clean_line)
+    print()
+    print("=" * 70)
+    print()
 
     # Create full text for copy/save
     full_text = f"""CLINICAL COPILOT ANALYSIS
@@ -246,11 +239,11 @@ ANALYSIS & RECOMMENDATIONS
 """
 
     # Options menu
-    console.print("[bold]Options:[/bold]")
-    console.print("  [cyan]c[/cyan] = Copy to clipboard")
-    console.print("  [cyan]s[/cyan] = Save to archive")
-    console.print("  [cyan]Enter[/cyan] = Close")
-    console.print()
+    print("Options:")
+    print("  c = Copy to clipboard")
+    print("  s = Save to archive")
+    print("  Enter = Close")
+    print()
 
     choice = input("Choice: ").strip().lower()
 
