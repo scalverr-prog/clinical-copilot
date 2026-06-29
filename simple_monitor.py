@@ -126,11 +126,11 @@ Be brief, direct, skeptical. Challenge the note. If everything looks appropriate
             return None
         conv_id = resp.json().get("conversation_id")
 
-        # Get interpretation (longer timeout for LLM)
+        # Get interpretation (120s timeout for LLM on Intel Mac)
         result = httpx.post(
             "http://localhost:8001/api/chat/message",
             json={"conversation_id": conv_id, "message": prompt},
-            timeout=60.0
+            timeout=120.0
         )
         if result.status_code == 200:
             return result.json().get("response")
@@ -336,19 +336,21 @@ def main():
                     if 'Diagnoses' in findings:
                         console.print(f"  Diagnoses: {findings['Diagnoses']}")
 
-                    # Get LLM interpretation
-                    console.print("[dim]  Analyzing...[/dim]")
-                    interpretation = get_clinical_interpretation(text, findings)
+                    # Get LLM interpretation (runs in background thread)
+                    import threading
+                    def run_analysis(txt, fnd):
+                        console.print("[dim]  🔄 Getting clinical review...[/dim]")
+                        interp = get_clinical_interpretation(txt, fnd)
+                        if interp:
+                            console.print("\n[bold yellow]── CLINICAL REVIEW ──[/bold yellow]")
+                            for line in interp.split('\n'):
+                                if line.strip():
+                                    console.print(f"  {line}")
+                            console.print()
+                        else:
+                            console.print("[dim]  (Clinical Insight busy or unavailable)[/dim]\n")
 
-                    if interpretation:
-                        console.print("[bold yellow]── CLINICAL REVIEW ──[/bold yellow]")
-                        # Format interpretation nicely
-                        for line in interpretation.split('\n'):
-                            if line.strip():
-                                console.print(f"  {line}")
-                        console.print()
-                    else:
-                        console.print("[dim]  (LLM interpretation unavailable)[/dim]\n")
+                    threading.Thread(target=run_analysis, args=(text, findings), daemon=True).start()
                 else:
                     console.print("[dim]  (No clinical data found)[/dim]")
 
