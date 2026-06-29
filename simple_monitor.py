@@ -86,6 +86,7 @@ def get_screen_text():
 def extract_clinical_data(text):
     """Extract critical clinical data points."""
     findings = {}
+    concerns = []
 
     # ICD codes
     icd_codes = re.findall(r'\b[A-Z]\d{2,3}\.?\d{0,2}\b', text)
@@ -101,6 +102,57 @@ def extract_clinical_data(text):
     if sex_match:
         findings['Sex'] = sex_match.group(1)
 
+    # VITALS - critical to extract
+    vitals = {}
+    temp = re.search(r'T[:\s]*(\d{2,3}\.?\d?)°?[CF]', text)
+    if temp:
+        vitals['Temp'] = temp.group(1)
+        if float(temp.group(1)) > 38.0:
+            concerns.append("🔥 FEVER")
+
+    hr = re.search(r'HR[:\s]*(\d{2,3})\s*(?:bpm)?', text, re.I)
+    if hr:
+        vitals['HR'] = hr.group(1)
+        if int(hr.group(1)) > 100:
+            concerns.append("⚡ TACHYCARDIA")
+
+    bp = re.search(r'BP[:\s]*(\d{2,3})/(\d{2,3})', text, re.I)
+    if bp:
+        vitals['BP'] = f"{bp.group(1)}/{bp.group(2)}"
+        if int(bp.group(1)) < 100:
+            concerns.append("⬇️ HYPOTENSION")
+
+    spo2 = re.search(r'SpO2?[:\s]*(\d{2,3})%?', text, re.I)
+    if spo2:
+        vitals['SpO2'] = spo2.group(1) + "%"
+        if int(spo2.group(1)) < 94:
+            concerns.append("🫁 LOW O2")
+
+    if vitals:
+        findings['Vitals'] = vitals
+
+    # WOUND measurements
+    wound = re.search(r'(\d+\.?\d*)\s*[x×]\s*(\d+\.?\d*)\s*[x×]?\s*(\d+\.?\d*)?\s*cm', text, re.I)
+    if wound:
+        if wound.group(3):
+            findings['Wound Size'] = f"{wound.group(1)} x {wound.group(2)} x {wound.group(3)} cm"
+        else:
+            findings['Wound Size'] = f"{wound.group(1)} x {wound.group(2)} cm"
+
+    # Wound composition
+    gran = re.search(r'(\d+)%\s*granulation', text, re.I)
+    slough = re.search(r'(\d+)%\s*slough', text, re.I)
+    if gran or slough:
+        comp = []
+        if gran: comp.append(f"{gran.group(1)}% granulation")
+        if slough: comp.append(f"{slough.group(1)}% slough")
+        findings['Wound Bed'] = ", ".join(comp)
+
+    # ALLERGIES
+    allergy = re.search(r'(?:allerg(?:y|ies)|NKA)[:\s]*([^.•\n]+)', text, re.I)
+    if allergy and 'no known' not in allergy.group(1).lower():
+        findings['Allergies'] = allergy.group(1).strip()[:50]
+
     # Diagnoses
     dx_patterns = [
         r'(?:diabetes|DM|T1DM|T2DM)',
@@ -109,6 +161,7 @@ def extract_clinical_data(text):
         r'(?:CHF|heart failure)',
         r'(?:CKD|kidney disease)',
         r'(?:infection|cellulitis|osteomyelitis)',
+        r'(?:sepsis|SIRS)',
     ]
     dx_found = []
     for pattern in dx_patterns:
@@ -116,38 +169,37 @@ def extract_clinical_data(text):
             match = re.search(pattern, text, re.I)
             dx_found.append(match.group(0))
     if dx_found:
-        findings['Diagnoses'] = dx_found
+        findings['Diagnoses'] = list(set(dx_found))
 
     # Medications
-    med_patterns = r'\b(bactrim|metformin|insulin|warfarin|aspirin|lisinopril|metoprolol|gabapentin|prednisone)\b'
+    med_patterns = r'\b(bactrim|metformin|insulin|warfarin|aspirin|lisinopril|metoprolol|gabapentin|prednisone|vancomycin|zosyn|cipro|doxycycline)\b'
     meds = re.findall(med_patterns, text, re.I)
     if meds:
         findings['Medications'] = list(set(meds))
 
     # Labs ordered
-    lab_patterns = r'(?:HbA1c|A1C|CBC|CMP|BMP|ESR|CRP|wound culture|blood culture|x-ray|MRI)'
+    lab_patterns = r'(?:HbA1c|A1C|CBC|CMP|BMP|ESR|CRP|wound culture|blood culture|x-ray|MRI|CT|cultures?)'
     labs = re.findall(lab_patterns, text, re.I)
     if labs:
         findings['Labs/Imaging'] = list(set(labs))
 
-    # Critical concerns
-    concerns = []
+    # Additional critical concerns (add to existing list from vitals)
     if re.search(r'(?:necrotic|necrosis|gangrene)', text, re.I):
-        concerns.append("NECROTIC TISSUE")
-    if re.search(r'(?:fever|sepsis|infection|cellulitis)', text, re.I):
-        concerns.append("INFECTION RISK")
+        concerns.append("⚫ NECROTIC TISSUE")
+    if re.search(r'(?:sepsis|SIRS)', text, re.I):
+        concerns.append("🚨 SEPSIS RISK")
+    if re.search(r'(?:infected|infection|cellulitis)', text, re.I):
+        concerns.append("🦠 INFECTION")
     if re.search(r'(?:plantar|heel|forefoot)', text, re.I) and re.search(r'(?:ulcer|DFU)', text, re.I):
-        concerns.append("OSTEOMYELITIS RISK")
+        concerns.append("🦴 OSTEOMYELITIS RISK")
     if re.search(r'(?:osteomyelitis|probe-to-bone)', text, re.I):
-        concerns.append("OSTEOMYELITIS WORKUP")
-    if re.search(r'(?:vascular|ABI|ischemia|perfusion)', text, re.I):
-        concerns.append("VASCULAR ASSESSMENT")
-    if re.search(r'(?:HBOT|hypoxia|TcPO2)', text, re.I):
-        concerns.append("HYPOXIA/HBOT")
-    if re.search(r'(?:off-?loading|TCC|total.?contact)', text, re.I):
-        concerns.append("OFFLOADING NEEDED")
-    if re.search(r'(?:vitals.*not documented|no vitals)', text, re.I):
-        concerns.append("MISSING VITALS")
+        concerns.append("🦴 OSTEOMYELITIS")
+    if re.search(r'(?:MRSA|resistant)', text, re.I):
+        concerns.append("⚠️ MRSA")
+    if re.search(r'(?:amputation)', text, re.I):
+        concerns.append("🦿 AMPUTATION RISK")
+    if re.search(r'(?:food insecurity|homeless)', text, re.I):
+        concerns.append("🏠 SOCIAL FACTORS")
     if concerns:
         findings['CONCERNS'] = concerns
 
