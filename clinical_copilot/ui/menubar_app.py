@@ -175,8 +175,8 @@ class CopilotMenuBar(rumps.App):
         """Open a window to submit a clinical note for analysis."""
         # Get note from user via clipboard or dialog
         window = rumps.Window(
-            message="Paste your clinical note below for analysis:\n\n(Analysis takes ~90 seconds on Intel Mac)",
-            title="Submit Clinical Note",
+            message="🐧 Paste your clinical note below for analysis:\n\n(Analysis takes ~90 seconds on Intel Mac)",
+            title="🐧 Clinical Copilot - Submit Note",
             default_text="",
             ok="Analyze",
             cancel="Cancel",
