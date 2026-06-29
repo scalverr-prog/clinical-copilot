@@ -66,17 +66,18 @@ def ensure_services():
                 _last_clinical_insight_restart = now
 
 def get_screen_text():
-    """Get current screen text from Screenpipe - only most recent."""
+    """Get current screen text from Screenpipe - find first valid clinical content."""
     try:
         resp = httpx.get("http://localhost:3030/search",
-                        params={"content_type": "ocr", "limit": 1},
+                        params={"content_type": "ocr", "limit": 5},
                         timeout=5.0)
         if resp.status_code == 200:
             data = resp.json()
             for item in data.get("data", []):
                 text = item.get("content", {}).get("text", "")
                 app = item.get("content", {}).get("app_name", "")
-                if len(text) > 50 and "Terminal" not in app and "Control" not in app:
+                # Skip empty, Terminal, Control Center, and Claude
+                if len(text) > 50 and "Terminal" not in app and "Control" not in app and "Claude" not in app:
                     return text, app
     except Exception as e:
         console.print(f"[red]Screenpipe error: {e}[/red]")
