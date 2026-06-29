@@ -28,12 +28,18 @@ class CopilotMenuBar(rumps.App):
         self.screenpipe_healthy = True
         self._watchdog_running = False
         self._animating = False
+        self._last_script_path = None
 
         # Menu items
+        self.last_analysis_item = rumps.MenuItem("No analysis yet", callback=self.view_last_analysis)
+        self.last_analysis_item.set_callback(None)  # Disabled initially
+
         self.menu = [
-            rumps.MenuItem("Start Copilot", callback=self.toggle),
             rumps.MenuItem("Submit Note", callback=self.submit_note),
             None,  # Separator
+            self.last_analysis_item,
+            None,
+            rumps.MenuItem("Start Copilot", callback=self.toggle),
             rumps.MenuItem("Status", callback=self.show_status),
             None,
             rumps.MenuItem("Quit", callback=self.quit_app)
@@ -280,16 +286,12 @@ display_analysis_sidebyside(note, analysis, {processing_time})
                 f.write(script)
             log(f"Script saved to {script_path}")
 
-            # Send notification with sound
-            log("Sending notification...")
-            rumps.notification(
-                "🐧 Clinical Copilot",
-                f"✅ Analysis complete! ({processing_time}s)",
-                "🐧 Results ready - opening Terminal...",
-                sound=True
-            )
+            # Store for re-viewing and update menu
+            self._last_script_path = script_path
+            self.last_analysis_item.title = f"✅ View Analysis ({processing_time}s)"
+            self.last_analysis_item.set_callback(self.view_last_analysis)
 
-            # Play alert sound for extra attention
+            # Play alert sound
             subprocess.run(["afplay", "/System/Library/Sounds/Glass.aiff"])
 
             # Open Terminal with formatted output and bring to front
@@ -315,6 +317,19 @@ display_analysis_sidebyside(note, analysis, {processing_time})
                 "❌ Analysis failed",
                 str(e)[:100]
             )
+
+    def view_last_analysis(self, _):
+        """Re-open the last analysis in Terminal."""
+        if self._last_script_path:
+            cmd = f"cd /Users/scalver/clinical-copilot-package && python3 {self._last_script_path}"
+            applescript = f'tell application "Terminal" to do script "{cmd}"'
+            subprocess.run(["osascript", "-e", applescript])
+            subprocess.run(["osascript", "-e", '''
+                tell application "Terminal"
+                    activate
+                    set frontmost to true
+                end tell
+            '''])
 
     @rumps.clicked("Status")
     def show_status(self, _):
