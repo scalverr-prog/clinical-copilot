@@ -100,7 +100,7 @@ def get_clinical_interpretation(text, findings):
             else:
                 findings_summary.append(f"• {key}: {value}")
 
-        prompt = f"""You are a clinical reviewer. Critically analyze this note - DO NOT summarize or recite what's written. Instead:
+        prompt = f"""You are a clinical detective. Your job is to find ERRORS, INCONSISTENCIES, and OVERLOOKED problems that a busy clinician might miss.
 
 CLINICAL DATA:
 {chr(10).join(findings_summary)}
@@ -108,17 +108,26 @@ CLINICAL DATA:
 TEXT:
 {text[:2000]}
 
-Provide ONLY:
+Find and report ONLY things that DON'T ADD UP:
 
-1. MISSING DATA - What critical info is NOT documented that should be?
-   (e.g., missing labs, undocumented exam findings, no allergy check)
+• CONTRADICTIONS - Symptoms that contradict each other or the diagnosis
+  (e.g., "seizure" but patient conversant and not post-ictal = not a true seizure)
 
-2. RED FLAGS - Does anything not make sense or seem inconsistent?
-   (e.g., vitals don't match diagnosis, meds contraindicated, illogical plan)
+• DOESN'T FIT - Findings that don't match the stated diagnosis
+  (e.g., "cellulitis" but no warmth, erythema, or tenderness documented)
 
-3. QUESTIONS TO ASK - What should the clinician verify or reconsider?
+• OVERLOOKED CLUES - Symptoms mentioned but not addressed in the plan
+  (e.g., patient has chest pain but no EKG ordered, or fever but no cultures)
 
-Be brief, direct, skeptical. Challenge the note. If everything looks appropriate, say so in one line."""
+• MATH ERRORS - Wrong dosing, weights, or calculations
+  (e.g., creatinine clearance not adjusted for renal dosing)
+
+• MISSING LOGIC - Steps skipped in clinical reasoning
+  (e.g., started antibiotics without identifying source of infection)
+
+Be a skeptic. If something seems off, call it out. If everything is consistent and logical, say "No inconsistencies found."
+
+Do NOT give generic advice. Only report specific problems you found in THIS case."""
 
         # Create conversation
         resp = httpx.post("http://localhost:8001/api/chat/new", timeout=10.0)
@@ -126,11 +135,11 @@ Be brief, direct, skeptical. Challenge the note. If everything looks appropriate
             return None
         conv_id = resp.json().get("conversation_id")
 
-        # Get interpretation (120s timeout for LLM on Intel Mac)
+        # Get interpretation (5 min timeout for LLM on Intel Mac CPU)
         result = httpx.post(
             "http://localhost:8001/api/chat/message",
             json={"conversation_id": conv_id, "message": prompt},
-            timeout=120.0
+            timeout=300.0
         )
         if result.status_code == 200:
             return result.json().get("response")
@@ -345,7 +354,24 @@ def main():
                             console.print("\n[bold yellow]── CLINICAL REVIEW ──[/bold yellow]")
                             for line in interp.split('\n'):
                                 if line.strip():
-                                    console.print(f"  {line}")
+                                    # Color code by urgency and type
+                                    upper = line.upper()
+                                    if any(w in upper for w in ['SEPSIS', 'STAT', 'URGENT', 'IMMEDIATE', 'CRITICAL', 'EMERGENCY']):
+                                        console.print(f"  [bold white on red]{line}[/bold white on red]")
+                                    elif 'MISSING' in upper or 'NOT DOCUMENTED' in upper or 'NO MENTION' in upper:
+                                        console.print(f"  [bold red]{line}[/bold red]")
+                                    elif 'RED FLAG' in upper or 'CONCERN' in upper or 'WARNING' in upper:
+                                        console.print(f"  [bold red]{line}[/bold red]")
+                                    elif any(w in upper for w in ['CONTRAINDICATED', 'ALLERGY', 'INTERACTION', 'HOLD', 'STOP']):
+                                        console.print(f"  [bold magenta]{line}[/bold magenta]")
+                                    elif 'QUESTION' in upper or '?' in line:
+                                        console.print(f"  [bold cyan]{line}[/bold cyan]")
+                                    elif any(w in upper for w in ['RECOMMEND', 'CONSIDER', 'SUGGEST', 'ORDER', 'CHECK', 'VERIFY']):
+                                        console.print(f"  [bold green]{line}[/bold green]")
+                                    elif line.strip().startswith(('1.', '2.', '3.')):
+                                        console.print(f"  [bold white]{line}[/bold white]")
+                                    else:
+                                        console.print(f"  {line}")
                             console.print()
                         else:
                             console.print("[dim]  (Clinical Insight busy or unavailable)[/dim]\n")
