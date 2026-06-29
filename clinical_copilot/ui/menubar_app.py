@@ -182,11 +182,16 @@ class CopilotMenuBar(rumps.App):
         self._watchdog_running = True
         threading.Thread(target=self._watchdog_loop, daemon=True).start()
 
-        # Open terminal with copilot
-        cmd = f"cd '{self.PROJECT_DIR}' && python3 -m clinical_copilot.main start"
+        # Open terminal with simple monitor
+        cmd = f"cd '{self.PROJECT_DIR}' && exec python3 simple_monitor.py"
         script = f'tell application "Terminal" to do script "{cmd}"'
         subprocess.run(["osascript", "-e", script])
-        subprocess.run(["osascript", "-e", 'tell application "Terminal" to activate'])
+        subprocess.run(["osascript", "-e", '''
+            tell application "Terminal"
+                activate
+                set frontmost to true
+            end tell
+        '''])
 
     def _stop(self):
         """Stop copilot."""
