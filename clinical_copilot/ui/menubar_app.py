@@ -266,6 +266,13 @@ input("\\nPress Enter to close...")
             with open(script_path, 'w') as f:
                 f.write(script)
 
+            # Send notification that analysis is complete
+            rumps.notification(
+                "🐧 Clinical Copilot",
+                f"Analysis complete ({processing_time}s)",
+                "Click to view results in Terminal"
+            )
+
             # Open Terminal with formatted output
             cmd = f"cd /Users/scalver/clinical-copilot-package && python3 {script_path}"
             applescript = f'tell application "Terminal" to do script "{cmd}"'
