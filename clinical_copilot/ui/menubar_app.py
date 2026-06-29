@@ -173,6 +173,9 @@ class CopilotMenuBar(rumps.App):
     @rumps.clicked("Submit Note")
     def submit_note(self, _):
         """Open a window to submit a clinical note for analysis."""
+        # Bring window to front
+        subprocess.run(["osascript", "-e", 'tell application "System Events" to set frontmost of process "Python" to true'])
+
         # Get note from user via clipboard or dialog
         window = rumps.Window(
             message="🐧 Paste your clinical note below for analysis:\n\n(Analysis takes ~90 seconds on Intel Mac)",
