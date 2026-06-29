@@ -237,9 +237,9 @@ class CopilotMenuBar(rumps.App):
 
             start_time = t.time()
 
-            # Create conversation
+            # Create conversation (30s timeout)
             log("Creating conversation...")
-            with httpx.Client(timeout=10.0) as client:
+            with httpx.Client(timeout=30.0) as client:
                 conv_resp = client.post(f"{self.CLINICAL_INSIGHT_URL}/api/chat/new")
                 conv_id = conv_resp.json().get("conversation_id")
             log(f"Conversation: {conv_id}")
