@@ -66,10 +66,10 @@ def ensure_services():
                 _last_clinical_insight_restart = now
 
 def get_screen_text():
-    """Get current screen text from Screenpipe."""
+    """Get current screen text from Screenpipe - only most recent."""
     try:
         resp = httpx.get("http://localhost:3030/search",
-                        params={"content_type": "ocr", "limit": 10},
+                        params={"content_type": "ocr", "limit": 1},
                         timeout=5.0)
         if resp.status_code == 200:
             data = resp.json()
