@@ -222,8 +222,31 @@ class CopilotMenuBar(rumps.App):
             frame += 1
             time.sleep(0.5)
 
+    def _extract_patient_initials(self, note: str) -> str:
+        """Extract patient initials from note."""
+        import re
+        # Try common patterns: "John Smith", "Smith, John", "JS", "J.S."
+        # Look for name patterns at start of note or after "Patient:" etc.
+
+        # Pattern 1: "Patient: John Smith" or "Name: John Smith"
+        match = re.search(r'(?:patient|name|pt)[:\s]+([A-Z][a-z]+)\s+([A-Z][a-z]+)', note, re.I)
+        if match:
+            return f"{match.group(1)[0]}{match.group(2)[0]}".upper()
+
+        # Pattern 2: First two capitalized words at start
+        match = re.search(r'^([A-Z][a-z]+)\s+([A-Z][a-z]+)', note.strip())
+        if match:
+            return f"{match.group(1)[0]}{match.group(2)[0]}".upper()
+
+        # Pattern 3: Age/sex pattern like "45yo M" - use generic
+        match = re.search(r'(\d+)\s*y/?o', note, re.I)
+        if match:
+            return f"PT"
+
+        return "PT"  # Default
+
     def _analyze_note(self, note: str):
-        """Send note to Clinical Insight API and display results."""
+        """Send note to Clinical Insight and display results."""
         import tempfile
         import time as t
 
@@ -231,9 +254,12 @@ class CopilotMenuBar(rumps.App):
             with open("/tmp/copilot_debug.log", "a") as f:
                 f.write(f"{t.strftime('%H:%M:%S')} {msg}\n")
 
+        # Extract patient initials early
+        initials = self._extract_patient_initials(note)
+
         try:
             import httpx
-            log("Starting analysis...")
+            log(f"Starting analysis for {initials}...")
 
             start_time = t.time()
 
@@ -286,9 +312,9 @@ display_analysis_sidebyside(note, analysis, {processing_time})
                 f.write(script)
             log(f"Script saved to {script_path}")
 
-            # Store for re-viewing and update menu
+            # Store for re-viewing and update menu with patient initials
             self._last_script_path = script_path
-            self.last_analysis_item.title = f"✅ View Analysis ({processing_time}s)"
+            self.last_analysis_item.title = f"✅ View Analysis - {initials}"
             self.last_analysis_item.set_callback(self.view_last_analysis)
 
             # Play alert sound
