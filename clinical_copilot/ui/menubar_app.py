@@ -250,7 +250,7 @@ class CopilotMenuBar(rumps.App):
             note_b64 = base64.b64encode(note.encode()).decode()
             analysis_b64 = base64.b64encode(analysis.encode()).decode()
 
-            script = f'''
+            script = f'''#!/usr/bin/env python3
 import sys
 import base64
 sys.path.insert(0, "{self.PROJECT_DIR}")
@@ -261,13 +261,13 @@ analysis = base64.b64decode("{analysis_b64}").decode()
 display_analysis_sidebyside(note, analysis, {processing_time})
 input("\\nPress Enter to close...")
 '''
-            # Save script to temp file
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            # Save script to fixed location (avoids temp file issues)
+            script_path = "/tmp/copilot_analysis.py"
+            with open(script_path, 'w') as f:
                 f.write(script)
-                script_path = f.name
 
             # Open Terminal with formatted output
-            cmd = f"python3 {script_path}"
+            cmd = f"cd /Users/scalver/clinical-copilot-package && python3 {script_path}"
             applescript = f'tell application "Terminal" to do script "{cmd}"'
             subprocess.run(["osascript", "-e", applescript])
             subprocess.run(["osascript", "-e", 'tell application "Terminal" to activate'])
