@@ -18,12 +18,16 @@ class CopilotMenuBar(rumps.App):
     SCREENPIPE_URL = "http://localhost:3030/health"
     CLINICAL_INSIGHT_URL = "http://localhost:8001"
 
+    # Animated spinner frames for processing
+    SPINNER_FRAMES = ["🐧⏳", "🐧⌛", "🐧🔄", "🐧⏳", "🐧⌛", "🐧💭"]
+
     def __init__(self):
         super().__init__("🐧", quit_button=None)
         self.is_on = False
         self.process = None
         self.screenpipe_healthy = True
         self._watchdog_running = False
+        self._animating = False
 
         # Menu items
         self.menu = [
@@ -183,8 +187,9 @@ class CopilotMenuBar(rumps.App):
         if response.clicked and response.text.strip():
             note = response.text.strip()
 
-            # Update menu to show analyzing
-            self.title = "🐧⏳"
+            # Start animated spinner
+            self._animating = True
+            threading.Thread(target=self._animate_icon, daemon=True).start()
 
             # Show processing notification
             rumps.notification(
@@ -199,6 +204,14 @@ class CopilotMenuBar(rumps.App):
                 args=(note,),
                 daemon=True
             ).start()
+
+    def _animate_icon(self):
+        """Animate the menu bar icon while processing."""
+        frame = 0
+        while self._animating:
+            self.title = self.SPINNER_FRAMES[frame % len(self.SPINNER_FRAMES)]
+            frame += 1
+            time.sleep(0.5)
 
     def _analyze_note(self, note: str):
         """Send note to Clinical Insight API and display results."""
@@ -228,7 +241,8 @@ class CopilotMenuBar(rumps.App):
 
             processing_time = int(t.time() - start_time)
 
-            # Restore icon
+            # Stop animation and restore icon
+            self._animating = False
             self.title = "🐧"
 
             # Write a Python script to display side-by-side output
@@ -259,6 +273,7 @@ input("\\nPress Enter to close...")
             subprocess.run(["osascript", "-e", 'tell application "Terminal" to activate'])
 
         except Exception as e:
+            self._animating = False
             self.title = "🐧"
             rumps.notification(
                 "Clinical Copilot",
