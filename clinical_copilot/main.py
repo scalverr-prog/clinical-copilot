@@ -245,24 +245,27 @@ ANALYSIS & RECOMMENDATIONS
     print("  Enter = Close")
     print()
 
-    choice = input("Choice: ").strip().lower()
+    try:
+        choice = input("Choice: ").strip().lower()
 
-    if choice == 'c':
-        # Copy to clipboard using pbcopy (macOS)
-        process = subprocess.Popen(['pbcopy'], stdin=subprocess.PIPE)
-        process.communicate(full_text.encode('utf-8'))
-        console.print("[green]✓ Copied to clipboard![/green]")
+        if choice == 'c':
+            # Copy to clipboard using pbcopy (macOS)
+            process = subprocess.Popen(['pbcopy'], stdin=subprocess.PIPE)
+            process.communicate(full_text.encode('utf-8'))
+            print("✓ Copied to clipboard!")
 
-    elif choice == 's':
-        # Save to archive
-        archive_dir = Path.home() / ".clinical-copilot" / "archive"
-        archive_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = archive_dir / f"analysis_{timestamp}.txt"
-        filename.write_text(full_text)
-        console.print(f"[green]✓ Saved to {filename}[/green]")
+        elif choice == 's':
+            # Save to archive
+            archive_dir = Path.home() / ".clinical-copilot" / "archive"
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = archive_dir / f"analysis_{timestamp}.txt"
+            filename.write_text(full_text)
+            print(f"✓ Saved to {filename}")
 
-    console.print()
+        print()
+    except Exception as e:
+        print(f"Error: {e}")
 
 
 def analyze_screen_once():
