@@ -26,6 +26,9 @@ _last_screenpipe_restart = 0
 _last_clinical_insight_restart = 0
 RESTART_COOLDOWN = 30  # seconds between restart attempts
 
+# Only allow one LLM request at a time
+_llm_in_progress = False
+
 def is_process_running(name):
     """Check if a process is running."""
     try:
@@ -85,11 +88,20 @@ def get_screen_text():
 
 def get_clinical_interpretation(text, findings):
     """Send to Clinical Insight for LLM analysis and interpretation."""
+    global _llm_in_progress
+
+    # Skip if already processing
+    if _llm_in_progress:
+        return None
+
     try:
+        _llm_in_progress = True
+
         # Quick health check first
         try:
             httpx.get("http://localhost:8001/health", timeout=2.0)
         except:
+            _llm_in_progress = False
             return None
 
         # Format the findings into a clinical prompt
@@ -129,9 +141,11 @@ Be direct and specific. If nothing concerning, just say so."""
             json={"conversation_id": conv_id, "message": prompt},
             timeout=600.0
         )
+        _llm_in_progress = False
         if result.status_code == 200:
             return result.json().get("response")
     except Exception as e:
+        _llm_in_progress = False
         console.print(f"[dim]  (Interpretation unavailable: {e})[/dim]")
     return None
 
@@ -336,6 +350,9 @@ def main():
                     # Get LLM interpretation (runs in background thread)
                     import threading
                     def run_analysis(txt, fnd):
+                        if _llm_in_progress:
+                            console.print("[dim]  ⏳ Analysis in progress...[/dim]")
+                            return
                         console.print("[dim]  🔄 Getting clinical review...[/dim]")
                         interp = get_clinical_interpretation(txt, fnd)
                         if interp:
