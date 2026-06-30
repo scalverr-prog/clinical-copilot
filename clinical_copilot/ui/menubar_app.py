@@ -390,7 +390,7 @@ class CopilotMenuBar(rumps.App):
                             f"{self.CLINICAL_INSIGHT_URL}/api/chat/message",
                             json={
                                 "conversation_id": conv_id,
-                                "message": f"""You are a clinical detective. Find ERRORS, INCONSISTENCIES, and OVERLOOKED problems in this note.
+                                "message": f"""You are a second LLM agent verifying the work of other agents and clinicians. Find ERRORS, INCONSISTENCIES, and OVERLOOKED problems in this note.
 
 Report ONLY things that DON'T ADD UP:
 • CONTRADICTIONS - Symptoms that contradict each other or the diagnosis

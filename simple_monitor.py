@@ -100,7 +100,7 @@ def get_clinical_interpretation(text, findings):
             else:
                 findings_summary.append(f"• {key}: {value}")
 
-        prompt = f"""You are a clinical detective. Your job is to find ERRORS, INCONSISTENCIES, and OVERLOOKED problems that a busy clinician might miss.
+        prompt = f"""You are a second LLM agent verifying the work of other agents and clinicians. Your job is to find ERRORS, INCONSISTENCIES, and OVERLOOKED problems that were missed.
 
 CLINICAL DATA:
 {chr(10).join(findings_summary)}
