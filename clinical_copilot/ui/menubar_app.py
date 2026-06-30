@@ -390,7 +390,19 @@ class CopilotMenuBar(rumps.App):
                             f"{self.CLINICAL_INSIGHT_URL}/api/chat/message",
                             json={
                                 "conversation_id": conv_id,
-                                "message": f"Review this clinical note for safety concerns, drug interactions, and gaps:\n\n{note}"
+                                "message": f"""You are a clinical detective. Find ERRORS, INCONSISTENCIES, and OVERLOOKED problems in this note.
+
+Report ONLY things that DON'T ADD UP:
+• CONTRADICTIONS - Symptoms that contradict each other or the diagnosis
+• DOESN'T FIT - Findings that don't match the stated diagnosis
+• OVERLOOKED CLUES - Symptoms mentioned but not addressed in the plan
+• MATH ERRORS - Wrong dosing, weights, or calculations
+• MISSING LOGIC - Steps skipped in clinical reasoning
+
+Be specific. If something seems off, call it out. Do NOT give generic advice - only report specific problems in THIS case.
+
+CLINICAL NOTE:
+{note}"""
                             }
                         )
                         analysis = result.json().get("response", "No response")
