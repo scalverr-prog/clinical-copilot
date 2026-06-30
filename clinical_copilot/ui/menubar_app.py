@@ -104,6 +104,53 @@ class CopilotMenuBar(rumps.App):
         except (urllib.error.URLError, TimeoutError, OSError):
             return False
 
+    def _check_clinical_insight_health(self) -> bool:
+        """Check if Clinical Insight is responding."""
+        try:
+            req = urllib.request.Request(self.CLINICAL_INSIGHT_URL + "/health", method='GET')
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                return resp.status == 200
+        except (urllib.error.URLError, TimeoutError, OSError):
+            return False
+
+    def _check_ollama_health(self) -> bool:
+        """Check if Ollama is responding."""
+        try:
+            req = urllib.request.Request("http://localhost:11434/api/tags", method='GET')
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                return resp.status == 200
+        except (urllib.error.URLError, TimeoutError, OSError):
+            return False
+
+    def _restart_clinical_insight(self):
+        """Restart Clinical Insight backend."""
+        subprocess.run(["pkill", "-9", "-f", "uvicorn.*8001"], capture_output=True)
+        time.sleep(1)
+        backend_dir = "/Users/scalver/clinical-copilot-package/clinical_insight_backend"
+        subprocess.Popen(
+            [f"{backend_dir}/venv/bin/python3", "-m", "uvicorn", "app.main:app", "--port", "8001"],
+            cwd=backend_dir,
+            stdout=open("/tmp/clinical-insight.log", "w"),
+            stderr=subprocess.STDOUT
+        )
+        for _ in range(10):
+            time.sleep(1)
+            if self._check_clinical_insight_health():
+                return True
+        return False
+
+    def _restart_ollama(self):
+        """Restart Ollama."""
+        subprocess.run(["pkill", "-9", "-f", "llama-server"], capture_output=True)
+        subprocess.run(["pkill", "-f", "ollama serve"], capture_output=True)
+        time.sleep(1)
+        subprocess.Popen(["open", "-a", "Ollama"])
+        for _ in range(15):
+            time.sleep(1)
+            if self._check_ollama_health():
+                return True
+        return False
+
     def _restart_screenpipe(self):
         """Kill and restart Screenpipe with proper cleanup."""
         # Kill existing processes
@@ -126,41 +173,29 @@ class CopilotMenuBar(rumps.App):
         return False
 
     def _watchdog_loop(self):
-        """Background watchdog that monitors Screenpipe health."""
+        """Background watchdog that monitors ALL services and auto-recovers."""
         while self._watchdog_running:
             time.sleep(self.WATCHDOG_INTERVAL)
             if not self._watchdog_running:
                 break
 
+            # Check Screenpipe
             was_healthy = self.screenpipe_healthy
             self.screenpipe_healthy = self._check_screenpipe_health()
-
             if not self.screenpipe_healthy:
-                # Screenpipe died - attempt recovery
-                rumps.notification(
-                    "Clinical Copilot",
-                    "Screen capture lost",
-                    "Attempting to restart Screenpipe..."
-                )
-                self._update_icon()
-
                 if self._restart_screenpipe():
                     self.screenpipe_healthy = True
-                    self._update_icon()
-                    rumps.notification(
-                        "Clinical Copilot",
-                        "Recovered",
-                        "Screen capture restored"
-                    )
-                else:
-                    rumps.notification(
-                        "Clinical Copilot",
-                        "Recovery failed",
-                        "Check System Settings > Privacy > Screen Recording"
-                    )
-            elif not was_healthy and self.screenpipe_healthy:
-                # Recovered externally
                 self._update_icon()
+            elif not was_healthy and self.screenpipe_healthy:
+                self._update_icon()
+
+            # Check Clinical Insight - auto-recover silently
+            if not self._check_clinical_insight_health():
+                self._restart_clinical_insight()
+
+            # Check Ollama - auto-recover silently
+            if not self._check_ollama_health():
+                self._restart_ollama()
 
     def _start(self):
         """Start copilot."""
@@ -173,12 +208,18 @@ class CopilotMenuBar(rumps.App):
             "Monitoring your clinical workflow"
         )
 
-        # Start screenpipe with proper health verification
+        # Ensure ALL services are running
         if not self._check_screenpipe_health():
             self._restart_screenpipe()
         self.screenpipe_healthy = self._check_screenpipe_health()
 
-        # Start watchdog thread
+        if not self._check_clinical_insight_health():
+            self._restart_clinical_insight()
+
+        if not self._check_ollama_health():
+            self._restart_ollama()
+
+        # Start watchdog thread (monitors all services)
         self._watchdog_running = True
         threading.Thread(target=self._watchdog_loop, daemon=True).start()
 
@@ -307,25 +348,53 @@ class CopilotMenuBar(rumps.App):
 
             start_time = t.time()
 
-            # Create conversation (30s timeout)
-            log("Creating conversation...")
-            with httpx.Client(timeout=30.0) as client:
-                conv_resp = client.post(f"{self.CLINICAL_INSIGHT_URL}/api/chat/new")
-                conv_id = conv_resp.json().get("conversation_id")
-            log(f"Conversation: {conv_id}")
+            # Ensure services are running before we start
+            if not self._check_clinical_insight_health():
+                log("Clinical Insight not healthy, restarting...")
+                self._restart_clinical_insight()
+            if not self._check_ollama_health():
+                log("Ollama not healthy, restarting...")
+                self._restart_ollama()
 
-            # Send note for analysis (longer timeout for inference)
-            log("Sending note for analysis...")
-            with httpx.Client(timeout=300.0) as client:
-                result = client.post(
-                    f"{self.CLINICAL_INSIGHT_URL}/api/chat/message",
-                    json={
-                        "conversation_id": conv_id,
-                        "message": f"Review this clinical note for safety concerns, drug interactions, and gaps:\n\n{note}"
-                    }
-                )
-                analysis = result.json().get("response", "No response")
-            log(f"Got response: {len(analysis)} chars")
+            # Retry logic for robustness
+            max_retries = 2
+            analysis = None
+
+            for attempt in range(max_retries):
+                try:
+                    # Create conversation
+                    log(f"Creating conversation (attempt {attempt + 1})...")
+                    with httpx.Client(timeout=30.0) as client:
+                        conv_resp = client.post(f"{self.CLINICAL_INSIGHT_URL}/api/chat/new")
+                        conv_id = conv_resp.json().get("conversation_id")
+                    log(f"Conversation: {conv_id}")
+
+                    # Send note for analysis (5 min timeout for Intel Mac)
+                    log("Sending note for analysis...")
+                    with httpx.Client(timeout=360.0) as client:
+                        result = client.post(
+                            f"{self.CLINICAL_INSIGHT_URL}/api/chat/message",
+                            json={
+                                "conversation_id": conv_id,
+                                "message": f"Review this clinical note for safety concerns, drug interactions, and gaps:\n\n{note}"
+                            }
+                        )
+                        analysis = result.json().get("response", "No response")
+                    log(f"Got response: {len(analysis)} chars")
+                    break  # Success, exit retry loop
+
+                except Exception as retry_error:
+                    log(f"Attempt {attempt + 1} failed: {retry_error}")
+                    if attempt < max_retries - 1:
+                        log("Restarting services and retrying...")
+                        self._restart_clinical_insight()
+                        self._restart_ollama()
+                        t.sleep(5)
+                    else:
+                        raise retry_error
+
+            if not analysis:
+                raise Exception("No response from LLM after retries")
 
             processing_time = int(t.time() - start_time)
             log(f"Processing time: {processing_time}s")
