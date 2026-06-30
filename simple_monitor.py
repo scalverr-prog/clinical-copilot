@@ -303,7 +303,7 @@ def main():
         return
 
     try:
-        httpx.get("http://localhost:8001/health", timeout=2.0)
+        httpx.get("http://localhost:8001/health", timeout=10.0)
         console.print("[green]✓ Clinical Insight ready[/green]")
     except:
         console.print("[yellow]○ Clinical Insight not available - extraction only[/yellow]")

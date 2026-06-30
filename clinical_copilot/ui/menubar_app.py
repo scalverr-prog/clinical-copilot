@@ -123,12 +123,13 @@ class CopilotMenuBar(rumps.App):
             return False
 
     def _restart_clinical_insight(self):
-        """Restart Clinical Insight backend."""
+        """Restart Clinical Insight backend with multiple workers."""
         subprocess.run(["pkill", "-9", "-f", "uvicorn.*8001"], capture_output=True)
         time.sleep(1)
         backend_dir = "/Users/scalver/clinical-copilot-package/clinical_insight_backend"
         subprocess.Popen(
-            [f"{backend_dir}/venv/bin/python3", "-m", "uvicorn", "app.main:app", "--port", "8001"],
+            [f"{backend_dir}/venv/bin/python3", "-m", "uvicorn", "app.main:app",
+             "--port", "8001", "--workers", "2"],  # 2 workers so health checks work during LLM
             cwd=backend_dir,
             stdout=open("/tmp/clinical-insight.log", "w"),
             stderr=subprocess.STDOUT
