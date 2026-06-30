@@ -100,34 +100,22 @@ def get_clinical_interpretation(text, findings):
             else:
                 findings_summary.append(f"• {key}: {value}")
 
-        prompt = f"""You are a second LLM agent verifying the work of other agents and clinicians. Your job is to find ERRORS, INCONSISTENCIES, and OVERLOOKED problems that were missed.
+        prompt = f"""You are a senior attending reviewing this clinical data. Think deeply about what you're seeing.
 
-CLINICAL DATA:
+EXTRACTED FINDINGS:
 {chr(10).join(findings_summary)}
 
-TEXT:
+CLINICAL TEXT:
 {text[:2000]}
 
-Find and report ONLY things that DON'T ADD UP:
+What's the real story here? Does everything fit together? What would worry you?
 
-• CONTRADICTIONS - Symptoms that contradict each other or the diagnosis
-  (e.g., "seizure" but patient conversant and not post-ictal = not a true seizure)
+Share your clinical impression briefly:
+- What doesn't add up?
+- What might we be missing?
+- What would you ask or do?
 
-• DOESN'T FIT - Findings that don't match the stated diagnosis
-  (e.g., "cellulitis" but no warmth, erythema, or tenderness documented)
-
-• OVERLOOKED CLUES - Symptoms mentioned but not addressed in the plan
-  (e.g., patient has chest pain but no EKG ordered, or fever but no cultures)
-
-• MATH ERRORS - Wrong dosing, weights, or calculations
-  (e.g., creatinine clearance not adjusted for renal dosing)
-
-• MISSING LOGIC - Steps skipped in clinical reasoning
-  (e.g., started antibiotics without identifying source of infection)
-
-Be a skeptic. If something seems off, call it out. If everything is consistent and logical, say "No inconsistencies found."
-
-Do NOT give generic advice. Only report specific problems you found in THIS case."""
+Be direct and specific. If nothing concerning, just say so."""
 
         # Create conversation
         resp = httpx.post("http://localhost:8001/api/chat/new", timeout=10.0)
