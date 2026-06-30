@@ -84,11 +84,24 @@ If you asked questions and the user didn't answer all of them, note which remain
                 "model": settings.ollama_model,
                 "prompt": full_prompt,
                 "stream": False,
+                "options": {
+                    "num_ctx": 2048,  # Smaller context = faster
+                }
             }
-            with httpx.Client(timeout=300.0) as client:  # 5 min for Intel Mac
-                response = client.post(url, json=payload)
-                response.raise_for_status()
-                return response.json().get("response", "")
+
+            # 10 min timeout with retry for Intel Mac reliability
+            timeout = httpx.Timeout(600.0, connect=30.0)
+            for attempt in range(2):
+                try:
+                    with httpx.Client(timeout=timeout) as client:
+                        response = client.post(url, json=payload)
+                        response.raise_for_status()
+                        return response.json().get("response", "")
+                except Exception as e:
+                    if attempt == 0:
+                        time.sleep(2)  # Brief pause before retry
+                        continue
+                    raise e
 
         elif settings.llm_provider == "anthropic" and settings.anthropic_api_key:
             import anthropic

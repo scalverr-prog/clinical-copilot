@@ -135,11 +135,11 @@ Do NOT give generic advice. Only report specific problems you found in THIS case
             return None
         conv_id = resp.json().get("conversation_id")
 
-        # Get interpretation (5 min timeout for LLM on Intel Mac CPU)
+        # Get interpretation (10 min timeout for LLM on Intel Mac CPU)
         result = httpx.post(
             "http://localhost:8001/api/chat/message",
             json={"conversation_id": conv_id, "message": prompt},
-            timeout=300.0
+            timeout=600.0
         )
         if result.status_code == 200:
             return result.json().get("response")

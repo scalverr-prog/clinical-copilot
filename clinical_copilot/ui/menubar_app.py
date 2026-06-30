@@ -383,9 +383,9 @@ class CopilotMenuBar(rumps.App):
                         conv_id = conv_resp.json().get("conversation_id")
                     log(f"Conversation: {conv_id}")
 
-                    # Send note for analysis (5 min timeout for Intel Mac)
+                    # Send note for analysis (10 min timeout for Intel Mac)
                     log("Sending note for analysis...")
-                    with httpx.Client(timeout=360.0) as client:
+                    with httpx.Client(timeout=600.0) as client:
                         result = client.post(
                             f"{self.CLINICAL_INSIGHT_URL}/api/chat/message",
                             json={
