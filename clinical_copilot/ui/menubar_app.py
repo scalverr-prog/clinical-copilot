@@ -173,12 +173,25 @@ class CopilotMenuBar(rumps.App):
                 return True
         return False
 
+    def _is_monitor_running(self) -> bool:
+        """Check if simple_monitor.py is still running."""
+        result = subprocess.run(["pgrep", "-f", "simple_monitor.py"], capture_output=True)
+        return result.returncode == 0
+
     def _watchdog_loop(self):
         """Background watchdog that monitors ALL services and auto-recovers."""
         while self._watchdog_running:
             time.sleep(self.WATCHDOG_INTERVAL)
             if not self._watchdog_running:
                 break
+
+            # Check if monitor was closed (user closed Terminal)
+            if self.is_on and not self._is_monitor_running():
+                self.is_on = False
+                self._watchdog_running = False
+                self.menu["Start Copilot"].title = "Start Copilot"
+                self._update_icon()
+                break  # Stop watchdog
 
             # Check Screenpipe
             was_healthy = self.screenpipe_healthy
