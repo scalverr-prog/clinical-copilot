@@ -390,16 +390,17 @@ class CopilotMenuBar(rumps.App):
                             f"{self.CLINICAL_INSIGHT_URL}/api/chat/message",
                             json={
                                 "conversation_id": conv_id,
-                                "message": f"""You are a second LLM agent verifying the work of other agents and clinicians. Find ERRORS, INCONSISTENCIES, and OVERLOOKED problems in this note.
+                                "message": f"""You are a senior attending physician reviewing this note. Think deeply.
 
-Report ONLY things that DON'T ADD UP:
-• CONTRADICTIONS - Symptoms that contradict each other or the diagnosis
-• DOESN'T FIT - Findings that don't match the stated diagnosis
-• OVERLOOKED CLUES - Symptoms mentioned but not addressed in the plan
-• MATH ERRORS - Wrong dosing, weights, or calculations
-• MISSING LOGIC - Steps skipped in clinical reasoning
+Read the whole note. Understand the clinical story. Then ask yourself:
+- Does this story make sense?
+- What could this actually be?
+- What would I worry about overnight?
+- What's being assumed that might be wrong?
 
-Be specific. If something seems off, call it out. Do NOT give generic advice - only report specific problems in THIS case.
+Give me your honest clinical impression. What concerns you? What would you do differently? What question would you ask the resident?
+
+Be substantive. Think out loud. This is a teaching moment.
 
 CLINICAL NOTE:
 {note}"""
