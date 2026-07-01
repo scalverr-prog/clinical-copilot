@@ -71,8 +71,9 @@ def ensure_services():
 def get_screen_text():
     """Get current screen text from Screenpipe - find first valid clinical content."""
     try:
+        # Search more items to find clinical content even if recent captures are Control Center
         resp = httpx.get("http://localhost:3030/search",
-                        params={"content_type": "ocr", "limit": 5},
+                        params={"content_type": "ocr", "limit": 20},
                         timeout=5.0)
         if resp.status_code == 200:
             data = resp.json()
@@ -220,23 +221,14 @@ def extract_clinical_data(text):
     if allergy and 'no known' not in allergy.group(1).lower():
         findings['Allergies'] = allergy.group(1).strip()[:50]
 
-    # Diagnoses
-    dx_patterns = [
-        r'(?:diabetes|DM|T1DM|T2DM)',
-        r'(?:ulcer|DFU|wound)',
-        r'(?:hypertension|HTN)',
-        r'(?:CHF|heart failure)',
-        r'(?:CKD|kidney disease)',
-        r'(?:infection|cellulitis|osteomyelitis)',
-        r'(?:sepsis|SIRS)',
-    ]
-    dx_found = []
-    for pattern in dx_patterns:
-        if re.search(pattern, text, re.I):
-            match = re.search(pattern, text, re.I)
-            dx_found.append(match.group(0))
-    if dx_found:
-        findings['Diagnoses'] = list(set(dx_found))
+    # Diagnoses - extract from explicit Dx/Diagnosis fields on screen
+    # Priority: Read what's actually labeled as diagnosis, not keyword guessing
+    dx_field = re.search(r'(?:Dx|Diagnosis|Assessment)[:\s]+([^\n•\[]+)', text, re.I)
+    if dx_field:
+        dx_text = dx_field.group(1).strip()
+        # Clean up and limit length
+        dx_text = re.sub(r'\s+', ' ', dx_text)[:100]
+        findings['Diagnoses'] = [dx_text]
 
     # Medications
     med_patterns = r'\b(bactrim|metformin|insulin|warfarin|aspirin|lisinopril|metoprolol|gabapentin|prednisone|vancomycin|zosyn|cipro|doxycycline)\b'

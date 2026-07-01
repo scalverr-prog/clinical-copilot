@@ -20,32 +20,58 @@ class LLMResponse(BaseModel):
 class OllamaClient:
     """Client for local Ollama LLM."""
 
-    CLINICAL_SYSTEM_PROMPT = """You are a clinical safety net. ONLY alert on things you can DIRECTLY SEE in the text.
+    CLINICAL_SYSTEM_PROMPT = """You are a diagnostic reasoning system. You REASON through cases to catch what pattern-matching misses.
 
-CRITICAL RULE: You must QUOTE the exact text that triggered your alert. If you cannot quote it, DO NOT alert.
+## YOUR JOB
 
-FORMAT - MUST include [Source: "quoted text"]:
-ALERT: [finding] - [action] [Source: "exact quote from text"]
-WARNING: [finding] - [reasoning] [Source: "exact quote"]
-SUGGESTION: [optimization] [Source: "exact quote"]
+Pattern matching catches known dangerous presentations. YOUR job is to:
+1. REASON about whether the diagnosis fits ALL the findings
+2. Catch NOVEL or SUBTLE cases where something doesn't add up
+3. Think about what ELSE this could be
 
-EXAMPLE:
-If text contains "K: 5.9 mEq/L" and "lisinopril 10mg":
-WARNING: Elevated K 5.9 on ACE inhibitor - monitor for hyperkalemia [Source: "K: 5.9" + "lisinopril 10mg"]
+## REASONING PROCESS
 
-DO NOT:
-- Make up findings not in the text
-- Assume medications or labs exist without seeing them
-- Alert on things you're guessing might be there
+1. **EXTRACT** - What are ALL the abnormal findings?
+2. **FIT CHECK** - Does the stated diagnosis explain EVERY abnormality?
+   - If yes → diagnosis may be correct
+   - If no → RED FLAG: something is being missed
+3. **WORST FIRST** - What's the most dangerous thing this could be?
+4. **DISCRIMINATE** - What one test would rule out the dangerous diagnosis?
 
-If you cannot quote specific text to support your alert: "No alerts."
+## FIT CHECK RULES
+
+A diagnosis should explain the clinical picture. Red flags when it doesn't:
+
+| Diagnosis | Should have | Should NOT have |
+|-----------|-------------|-----------------|
+| Spasm/functional | Normal vitals | Fever, tachycardia, hypoxia |
+| Anxiety | Normal vitals, no fever | Fever, hypoxia |
+| Viral syndrome | Low-grade fever | Very high fever, focal findings |
+| Musculoskeletal | Normal vitals, reproducible | Systemic symptoms |
+
+## PHYSIOLOGIC REASONING
+
+Multiple abnormal vitals = systemic process:
+- Tachycardia + fever + tachypnea = infection/inflammation/injury
+- This is NOT anxiety, NOT spasm, NOT "viral" without more workup
+
+## OUTPUT FORMAT
+
+If diagnosis fits findings: "No concerns - diagnosis fits clinical picture"
+
+If something doesn't fit:
+
+**FINDING:** [What abnormality exists]
+**PROBLEM:** [Why the diagnosis doesn't explain it]
+**CONSIDER:** [Dangerous alternative diagnosis]
+**ACTION:** [What to do - specific test or consult]
 """
 
     def __init__(self, base_url: Optional[str] = None):
         self.base_url = base_url or settings.ollama.base_url
         self.primary_model = settings.ollama.primary_model
         self.fallback_model = settings.ollama.fallback_model
-        self.timeout = settings.ollama.timeout
+        self.timeout = max(settings.ollama.timeout, 300)  # At least 5 min for slow hardware
         self._client = httpx.Client(timeout=self.timeout)
 
     def health_check(self) -> bool:
@@ -164,8 +190,8 @@ If you cannot quote specific text to support your alert: "No alerts."
         screen_text: str,
         context: Optional[str] = None
     ) -> LLMResponse:
-        """Analyze clinical content from screen capture."""
-        prompt = f"""TEXT VISIBLE ON SCREEN:
+        """Analyze clinical content from screen capture using diagnostic reasoning."""
+        prompt = f"""CLINICAL DATA ON SCREEN:
 ---
 {screen_text}
 ---
@@ -175,13 +201,23 @@ If you cannot quote specific text to support your alert: "No alerts."
 """
 
         prompt += """
-Find clinical concerns. MUST quote the source text for each alert.
+REASON through this case:
 
-Format: LEVEL: [issue] [Source: "exact quote from text above"]
+1. What are the KEY FINDINGS? (symptoms, vitals, history, stated diagnosis)
 
-Example: WARNING: High potassium on ACE inhibitor [Source: "K 5.8" + "lisinopril"]
+2. Are there ABNORMAL VITALS? If so, what processes cause them?
 
-If you cannot quote specific text, respond: "No alerts."
+3. Does the DIAGNOSIS (if stated) explain ALL abnormal findings?
+   - What does it explain?
+   - What does it NOT explain?
+
+4. Could this be a DANGEROUS diagnosis that's being missed?
+
+OUTPUT:
+- If diagnosis fits all findings: "No concerns"
+- If something doesn't fit: RED FLAG: [unexplained finding] - [dangerous alternative] - [next step] [Source: "quote"]
+
+REMEMBER: Multiple abnormal vitals (tachycardia + fever + tachypnea) = systemic process, not spasm/anxiety.
 """
 
         return self.generate(prompt)

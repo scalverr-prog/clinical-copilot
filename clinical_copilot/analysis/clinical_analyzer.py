@@ -114,6 +114,71 @@ class ClinicalAnalyzer:
         }
     }
 
+    # Critical syndrome patterns - ALWAYS flag these regardless of LLM reasoning
+    # These are "can't miss" patterns with high mortality if delayed
+    # The LLM reasoning layer provides additional coverage for novel patterns
+    CRITICAL_PATTERNS = {
+        "boerhaave_basic": {
+            "pattern": r"(?i)(chest pain|thoracic|substernal).{0,100}(vomit|retch|heav)",
+            "level": "warning",
+            "message": "Chest pain + vomiting - consider esophageal injury",
+            "details": "Chest pain following vomiting raises concern for esophageal injury (Boerhaave syndrome). Consider chest X-ray to rule out pneumomediastinum before diagnosing as spasm.",
+            "category": "cant_miss"
+        },
+        "boerhaave_high_risk": {
+            # Match alcohol mention anywhere in text with chest pain + vomiting
+            "pattern": r"(?i)(?=.*(alcohol|drinker|etoh|heavy drink))(?=.*(chest pain|thoracic|substernal))(?=.*(vomit|retch))",
+            "level": "alert",
+            "message": "HIGH RISK: Heavy drinker + chest pain + vomiting = Boerhaave until proven otherwise",
+            "details": "Classic Boerhaave presentation. Mortality >80% if missed. STAT chest imaging required before discharge. Do NOT dismiss as esophageal spasm without imaging.",
+            "category": "cant_miss"
+        },
+        "boerhaave_with_systemic": {
+            # Match chest pain + vomiting + any systemic sign (order independent)
+            "pattern": r"(?i)(?=.*(chest pain|thoracic|substernal))(?=.*(vomit|retch))(?=.*(HR.{0,5}1[0-2]\d|Temp.{0,5}(99|10)|RR.{0,5}2[4-9]|SpO2.{0,5}9[0-4]|tachycard|fever|tachypne))",
+            "level": "alert",
+            "message": "CRITICAL: Chest pain + vomiting + systemic signs = possible mediastinitis",
+            "details": "Fever, tachycardia, tachypnea, or hypoxia after chest pain + vomiting suggests esophageal perforation with mediastinal contamination. SURGICAL EMERGENCY. CT chest and thoracic surgery consult STAT.",
+            "category": "cant_miss"
+        },
+        "dissection": {
+            "pattern": r"(?i)(tearing|ripping|worst.{0,15}life|sudden severe).{0,50}(chest|back).{0,30}pain",
+            "level": "alert",
+            "message": "Tearing/ripping chest or back pain - rule out aortic dissection",
+            "details": "Tearing quality pain suggests aortic dissection. Check BP both arms, pulse deficits. CT angiography STAT. Do NOT give thrombolytics for suspected MI without ruling out dissection.",
+            "category": "cant_miss"
+        },
+        "mesenteric": {
+            "pattern": r"(?i)(abd|abdominal).{0,30}pain.{0,50}(out of proportion|severe|excruciating).{0,50}(exam|benign|soft|non.?tender)",
+            "level": "alert",
+            "message": "Severe abdominal pain with benign exam - consider mesenteric ischemia",
+            "details": "Pain out of proportion to exam is classic for mesenteric ischemia. Risk factors: A-fib, vascular disease. Lactate and CT angiography. Mortality >70% if bowel necrosis occurs.",
+            "category": "cant_miss"
+        },
+        "nec_fasc": {
+            "pattern": r"(?i)(cellulitis|skin.{0,20}infection).{0,80}(pain out of proportion|crepitus|rapid.{0,20}spread|bullae|necrotic|gas)",
+            "level": "alert",
+            "message": "Skin infection with severe pain or rapid spread - consider necrotizing fasciitis",
+            "details": "Pain out of proportion, crepitus, rapid spread, or bullae in soft tissue infection suggests necrotizing fasciitis. Surgical debridement is definitive treatment. Broad-spectrum antibiotics and surgery consult STAT.",
+            "category": "cant_miss"
+        },
+        "pe_syncope": {
+            "pattern": r"(?i)(syncope|collapse|passed out).{0,100}(dyspnea|SOB|shortness|tachycard|chest pain)",
+            "level": "warning",
+            "message": "Syncope with cardiopulmonary symptoms - consider PE",
+            "details": "Syncope with dyspnea, chest pain, or tachycardia may indicate massive PE. Calculate Wells score. Consider CT-PA or empiric anticoagulation if high suspicion.",
+            "category": "cant_miss"
+        },
+        "spasm_with_abnormal_vitals": {
+            # Match spasm diagnosis with any abnormal vital (order independent)
+            "pattern": r"(?i)(?=.*(esophageal spasm|Dx:.{0,20}spasm|spasm.{0,20}(relaxant|antispasmodic)))(?=.*(HR.{0,5}1[0-2]\d|Temp.{0,5}(99|10)|RR.{0,5}2[4-9]|SpO2.{0,5}9[0-4]))",
+            "level": "alert",
+            "message": "Esophageal spasm diagnosis with abnormal vitals - DIAGNOSIS DOES NOT FIT",
+            "details": "Esophageal spasm should have NORMAL vital signs. Tachycardia, fever, tachypnea, or hypoxia indicate tissue injury or systemic process - NOT functional spasm. Reconsider diagnosis. Obtain chest imaging.",
+            "category": "fit_check"
+        },
+    }
+
     # Critical lab thresholds with clinical rationale and recommendations
     CRITICAL_LABS = {
         "potassium": {
@@ -591,24 +656,101 @@ class ClinicalAnalyzer:
 
         return alerts
 
+    def _check_critical_patterns(self, text: str, source_app: str) -> list[ClinicalAlert]:
+        """Check for critical 'can't miss' patterns - high mortality if delayed.
+
+        These patterns are ALWAYS checked regardless of LLM reasoning.
+        They serve as a safety net for known deadly presentations.
+
+        Strategy: Fire the MOST SPECIFIC matching pattern for each condition.
+        E.g., if boerhaave_high_risk matches, skip boerhaave_basic.
+        """
+        alerts = []
+        now = datetime.now()
+
+        # Track which base conditions matched at what severity
+        # Higher number = more specific/severe
+        severity_order = {"basic": 1, "high_risk": 2, "with_systemic": 3, "abnormal_vitals": 2}
+        matched_conditions = {}  # base_name -> (severity, config, name)
+
+        for name, config in self.CRITICAL_PATTERNS.items():
+            if re.search(config["pattern"], text, re.DOTALL | re.IGNORECASE):
+                # Determine base condition and specificity
+                parts = name.split("_")
+                base_name = parts[0]
+                variant = "_".join(parts[1:]) if len(parts) > 1 else "basic"
+                severity = severity_order.get(variant, 1)
+
+                # Keep the most specific/severe match for each base condition
+                if base_name not in matched_conditions or severity > matched_conditions[base_name][0]:
+                    matched_conditions[base_name] = (severity, config, name)
+
+        # Also check fit_check patterns - these always fire if matched
+        for name, config in self.CRITICAL_PATTERNS.items():
+            if config.get("category") == "fit_check":
+                if re.search(config["pattern"], text, re.DOTALL | re.IGNORECASE):
+                    level = AlertLevel.ALERT if config["level"] == "alert" else AlertLevel.WARNING
+                    alerts.append(ClinicalAlert(
+                        level=level,
+                        message=config["message"],
+                        details=config["details"],
+                        timestamp=now,
+                        source_app=source_app,
+                        confidence=0.92,
+                        category="fit_check",
+                    ))
+
+        # Create alerts for the most specific match of each condition
+        for base_name, (severity, config, name) in matched_conditions.items():
+            if config.get("category") == "fit_check":
+                continue  # Already handled above
+
+            level = AlertLevel.ALERT if config["level"] == "alert" else \
+                    AlertLevel.WARNING if config["level"] == "warning" else \
+                    AlertLevel.SUGGESTION
+
+            alerts.append(ClinicalAlert(
+                level=level,
+                message=config["message"],
+                details=config["details"],
+                timestamp=now,
+                source_app=source_app,
+                confidence=0.90,
+                category=config.get("category", "cant_miss"),
+            ))
+
+        return alerts
+
     def quick_check(self, content: ScreenContent) -> list[ClinicalAlert]:
-        """INSTANT: Pattern-based checks only (no LLM). Returns in <10ms."""
+        """INSTANT: Pattern-based checks (no LLM). Returns in <10ms.
+
+        Two types of pattern checks:
+        1. OBJECTIVE thresholds - critical labs and vitals
+        2. CRITICAL patterns - known deadly presentations (can't miss)
+
+        The LLM reasoning layer (analyze_with_llm) provides ADDITIONAL coverage
+        for novel patterns and diagnostic fit assessment.
+        """
         text = content.text_content
         if content.ocr_text and content.ocr_text != content.text_content:
             text += "\n" + content.ocr_text
 
-        # Extract and check labs
+        # Extract and check labs (objective thresholds)
         labs = self._extract_labs(text)
         lab_alerts = self._check_critical_labs(labs, content.app_name)
 
-        # Extract and check vitals
+        # Extract and check vitals (objective thresholds)
         vitals = self._extract_vitals(text)
         vital_alerts = self._check_critical_vitals(vitals, content.app_name)
 
-        # Check wound care patterns
+        # Check wound care patterns (domain-specific)
         wound_alerts = self._check_wound_care_patterns(text, content.app_name)
 
-        return lab_alerts + vital_alerts + wound_alerts
+        # Check critical "can't miss" patterns (Boerhaave, dissection, etc.)
+        # These ALWAYS fire - LLM reasoning provides additional coverage
+        critical_alerts = self._check_critical_patterns(text, content.app_name)
+
+        return lab_alerts + vital_alerts + wound_alerts + critical_alerts
 
     def analyze_with_llm(
         self,
