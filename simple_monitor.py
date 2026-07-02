@@ -8,6 +8,7 @@ import subprocess
 import os
 import signal
 import sys
+from datetime import datetime, timezone, timedelta
 from rich.console import Console
 from rich.panel import Panel
 
@@ -28,6 +29,10 @@ RESTART_COOLDOWN = 30  # seconds between restart attempts
 
 # Only allow one LLM request at a time
 _llm_in_progress = False
+
+# PATIENT SAFETY: Track shown content to prevent duplicates/stale data
+_shown_content_hashes = set()
+MAX_DATA_AGE_SECONDS = 5  # Only use data from last 5 seconds - PATIENT SAFETY
 
 def is_process_running(name):
     """Check if a process is running."""
@@ -69,19 +74,43 @@ def ensure_services():
                 _last_clinical_insight_restart = now
 
 def get_screen_text():
-    """Get current screen text from Screenpipe - find first valid clinical content."""
+    """Get current screen text from Screenpipe - only fresh, unseen data."""
+    global _shown_content_hashes
     try:
-        # Search more items to find clinical content even if recent captures are Control Center
+        # Only get data from the last N seconds to prevent stale patient data
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=MAX_DATA_AGE_SECONDS)
+
         resp = httpx.get("http://localhost:3030/search",
                         params={"content_type": "ocr", "limit": 20},
                         timeout=5.0)
         if resp.status_code == 200:
             data = resp.json()
             for item in data.get("data", []):
+                # Check timestamp - skip stale data (PATIENT SAFETY)
+                ts_str = item.get("content", {}).get("timestamp", "")
+                if ts_str:
+                    try:
+                        item_time = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                        if item_time < cutoff:
+                            continue  # Skip stale data
+                    except:
+                        continue
+
                 text = item.get("content", {}).get("text", "")
                 app = item.get("content", {}).get("app_name", "")
+
                 # Skip empty, Terminal, Control Center, and Claude
                 if len(text) > 50 and "Terminal" not in app and "Control" not in app and "Claude" not in app:
+                    # PATIENT SAFETY: Skip if we've already shown this exact content
+                    content_hash = hash(text[:500])  # Hash first 500 chars
+                    if content_hash in _shown_content_hashes:
+                        continue
+
+                    _shown_content_hashes.add(content_hash)
+                    # Keep hash set bounded (max 100 entries)
+                    if len(_shown_content_hashes) > 100:
+                        _shown_content_hashes = set(list(_shown_content_hashes)[-50:])
+
                     return text, app
     except Exception as e:
         console.print(f"[red]Screenpipe error: {e}[/red]")
