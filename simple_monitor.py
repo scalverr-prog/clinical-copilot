@@ -147,7 +147,7 @@ def get_clinical_interpretation(text, findings):
             else:
                 findings_summary.append(f"• {key}: {value}")
 
-        prompt = f"""You are a senior attending reviewing this clinical data. Think deeply about what you're seeing.
+        prompt = f"""You are a senior attending teaching a resident. Your job is to identify GAPS in the workup - what questions haven't been asked, what history is missing, what would CHANGE the diagnosis or treatment.
 
 EXTRACTED FINDINGS:
 {chr(10).join(findings_summary)}
@@ -155,14 +155,21 @@ EXTRACTED FINDINGS:
 CLINICAL TEXT:
 {text[:2000]}
 
-What's the real story here? Does everything fit together? What would worry you?
+THINK STEP BY STEP:
+1. What is the working diagnosis?
+2. What OBJECTIVE findings support or refute it?
+3. What SUBJECTIVE history is MISSING that would confirm or change the diagnosis?
+   - For seizures: postictal state? responsive during event? witness description? tongue biting? incontinence?
+   - For chest pain: character? radiation? exertional? reproducible? associated symptoms?
+   - For abdominal pain: location evolution? bowel function? surgical history?
+4. Does the treatment make sense IF the diagnosis is wrong?
 
-Share your clinical impression briefly:
-- What doesn't add up?
-- What might we be missing?
-- What would you ask or do?
+YOUR RESPONSE - be specific and actionable:
+• DIAGNOSTIC UNCERTAINTY: What else could this be? What's the miss rate?
+• MISSING INFORMATION: What specific questions need answers before treatment?
+• SAFETY CHECK: What's the worst thing this could be, and have we ruled it out?
 
-Be direct and specific. If nothing concerning, just say so."""
+Tell them what they DON'T know. Don't summarize what's already documented."""
 
         # Create conversation
         resp = httpx.post("http://localhost:8001/api/chat/new", timeout=10.0)
