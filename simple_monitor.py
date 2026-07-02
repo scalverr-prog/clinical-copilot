@@ -147,7 +147,7 @@ def get_clinical_interpretation(text, findings):
             else:
                 findings_summary.append(f"• {key}: {value}")
 
-        prompt = f"""You are a senior attending teaching a resident. Your job is to identify GAPS in the workup - what questions haven't been asked, what history is missing, what would CHANGE the diagnosis or treatment.
+        prompt = f"""You are a senior attending teaching a resident. Your job is to identify GAPS - what's missing that would CONFIRM or CHANGE the diagnosis and treatment.
 
 EXTRACTED FINDINGS:
 {chr(10).join(findings_summary)}
@@ -155,21 +155,30 @@ EXTRACTED FINDINGS:
 CLINICAL TEXT:
 {text[:2000]}
 
-THINK STEP BY STEP:
-1. What is the working diagnosis?
-2. What OBJECTIVE findings support or refute it?
-3. What SUBJECTIVE history is MISSING that would confirm or change the diagnosis?
-   - For seizures: postictal state? responsive during event? witness description? tongue biting? incontinence?
-   - For chest pain: character? radiation? exertional? reproducible? associated symptoms?
-   - For abdominal pain: location evolution? bowel function? surgical history?
-4. Does the treatment make sense IF the diagnosis is wrong?
+APPLY THIS FRAMEWORK TO ANY CASE:
 
-YOUR RESPONSE - be specific and actionable:
-• DIAGNOSTIC UNCERTAINTY: What else could this be? What's the miss rate?
-• MISSING INFORMATION: What specific questions need answers before treatment?
-• SAFETY CHECK: What's the worst thing this could be, and have we ruled it out?
+1. WORKING DIAGNOSIS: What diagnosis is being treated?
 
-Tell them what they DON'T know. Don't summarize what's already documented."""
+2. OBJECTIVE EVIDENCE: What exam findings, vitals, labs, imaging SUPPORT this diagnosis? What's MISSING or CONTRADICTS it?
+
+3. SUBJECTIVE HISTORY GAPS: What questions would a thorough history include that aren't documented?
+   - Onset, timing, duration, progression
+   - Aggravating/alleviating factors
+   - Associated symptoms (what was present AND absent)
+   - Patient's mental status and ability to provide history
+   - Witness accounts if patient couldn't self-report
+   - Prior episodes, prior workups, what's been tried
+
+4. DIAGNOSIS-TREATMENT LINK: Does the treatment make sense ONLY if this diagnosis is correct? What happens if it's wrong?
+
+5. DIFFERENTIAL: What else could cause this presentation? What's the most dangerous alternative? Has it been ruled out?
+
+YOUR RESPONSE:
+• DIAGNOSTIC GAPS: What history/exam/tests would confirm or refute this diagnosis?
+• MISSING INFORMATION: What specific questions need answers BEFORE committing to treatment?
+• SAFETY CHECK: What's the worst-case diagnosis, and is there evidence it's been considered?
+
+Tell them what they DON'T know. Don't summarize what's documented."""
 
         # Create conversation
         resp = httpx.post("http://localhost:8001/api/chat/new", timeout=10.0)
