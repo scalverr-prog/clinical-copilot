@@ -61,7 +61,7 @@ else
         fi
 
         echo -n "starting... "
-        "$SCREENPIPE_BIN" --fps 1 > /tmp/screenpipe.log 2>&1 &
+        "$SCREENPIPE_BIN" --fps 1 --disable-audio > /tmp/screenpipe.log 2>&1 &
 
         if wait_for_service "http://localhost:3030/health" "Screenpipe" 15; then
             echo -e "${GREEN}ready${NC}"
@@ -137,14 +137,15 @@ fi
 # --- SERVICE WATCHDOG (keeps services running) ---
 nohup python3 "$SCRIPT_DIR/service_watchdog.py" > /tmp/watchdog.log 2>&1 &
 
-# --- CLINICAL MONITOR (Terminal popup with Rich formatting - auto-starts) ---
-# Use exec so closing Terminal window stops the monitor
-osascript -e "
-tell application \"Terminal\"
-    activate
-    do script \"cd '$SCRIPT_DIR' && exec python3 simple_monitor.py\"
-end tell
-"
+# --- CLINICAL MONITOR (Terminal popup with Rich formatting - only if not running) ---
+if ! pgrep -f "simple_monitor.py" > /dev/null 2>&1; then
+    osascript -e "
+    tell application \"Terminal\"
+        activate
+        do script \"cd '$SCRIPT_DIR' && exec python3 simple_monitor.py\"
+    end tell
+    "
+fi
 
 echo ""
 echo "✓ Clinical Copilot monitoring started"

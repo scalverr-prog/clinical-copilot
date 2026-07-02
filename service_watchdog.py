@@ -11,8 +11,8 @@ import httpx
 SERVICES = {
     "screenpipe": {
         "health_url": "http://localhost:3030/health",
-        "start_cmd": ["/usr/local/bin/screenpipe", "--fps", "1"],
-        "alt_start_cmd": ["/opt/homebrew/bin/screenpipe", "--fps", "1"],  # Apple Silicon
+        "start_cmd": ["/usr/local/bin/screenpipe", "--fps", "1", "--disable-audio"],
+        "alt_start_cmd": ["/opt/homebrew/bin/screenpipe", "--fps", "1", "--disable-audio"],  # Apple Silicon
         "log": "/tmp/screenpipe.log",
         "stale_check": True,  # Also check for stale data
         "max_stale_seconds": 60,  # Restart if no new captures for 60 seconds

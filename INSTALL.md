@@ -32,8 +32,18 @@ pip3 install -r requirements.txt
 
 ### 2. Grant Permissions
 
-- **Screen Recording**: System Preferences → Privacy & Security → Screen Recording → Enable for Terminal/Python
-- **Accessibility**: May be needed for some features
+**Screen Recording** (System Settings → Privacy & Security → Screen Recording):
+
+1. Enable **Terminal** (or iTerm)
+2. Enable **screenpipe**
+3. Add **Python** (click + and navigate to):
+   ```
+   /Library/Frameworks/Python.framework/Versions/3.10/Resources/Python.app
+   ```
+
+> **Note**: On macOS Sequoia+, if you see repeated "Python is requesting to bypass the system private window picker" dialogs, adding Python.app to Screen Recording will fix this permanently.
+
+**Accessibility**: May be needed for some features
 
 ### 3. Start Services
 

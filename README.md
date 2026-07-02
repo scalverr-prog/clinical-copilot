@@ -162,6 +162,43 @@ copilot config --exclude "Slack"         # Add app to exclusion
 
 MIT License - See LICENSE file for details.
 
+## Troubleshooting
+
+### "Python is requesting to bypass the system private window picker" (Repeated Permission Prompts)
+
+On macOS Sequoia+, you may see repeated dialogs asking Python for Screen Recording permission. To fix permanently:
+
+1. Open **System Settings** → **Privacy & Security** → **Screen Recording**
+2. Ensure **screenpipe** and **Terminal** are enabled
+3. Click **+** to add Python:
+   - Press **Cmd+Shift+G** (Go to folder)
+   - Paste: `/Library/Frameworks/Python.framework/Versions/3.10/Resources/Python.app`
+   - Click **Open**
+4. Restart the copilot: `./stop-copilot.sh && ./start-copilot.sh`
+
+### Services Not Starting
+
+```bash
+# Check service health
+curl http://localhost:3030/health   # Screenpipe
+curl http://localhost:11434/api/tags # Ollama
+curl http://localhost:8001/health   # Clinical Insight
+
+# View logs
+cat /tmp/screenpipe.log
+cat /tmp/clinical-insight.log
+cat /tmp/ollama.log
+```
+
+### Screenpipe Stale/Not Capturing
+
+```bash
+# Force restart screenpipe
+pkill -9 screenpipe
+pkill -9 -f "ffmpeg.*screenpipe"
+./start-copilot.sh
+```
+
 ## Disclaimer
 
 This tool is for clinical decision **support** only. Always verify findings and use clinical judgment. This is not a substitute for professional medical training or established clinical protocols.
