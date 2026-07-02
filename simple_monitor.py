@@ -32,7 +32,9 @@ _llm_in_progress = False
 
 # PATIENT SAFETY: Track shown content to prevent duplicates/stale data
 _shown_content_hashes = set()
-MAX_DATA_AGE_SECONDS = 5  # Only use data from last 5 seconds - PATIENT SAFETY
+_is_first_scan = True  # Track if this is first scan after startup
+STARTUP_DATA_AGE_SECONDS = 5   # Strict on startup - prevent old patient data
+NORMAL_DATA_AGE_SECONDS = 60   # Relaxed during operation
 
 def is_process_running(name):
     """Check if a process is running."""
@@ -75,10 +77,11 @@ def ensure_services():
 
 def get_screen_text():
     """Get current screen text from Screenpipe - only fresh, unseen data."""
-    global _shown_content_hashes
+    global _shown_content_hashes, _is_first_scan
     try:
-        # Only get data from the last N seconds to prevent stale patient data
-        cutoff = datetime.now(timezone.utc) - timedelta(seconds=MAX_DATA_AGE_SECONDS)
+        # PATIENT SAFETY: Strict 5s window on startup, relaxed 60s during operation
+        max_age = STARTUP_DATA_AGE_SECONDS if _is_first_scan else NORMAL_DATA_AGE_SECONDS
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=max_age)
 
         resp = httpx.get("http://localhost:3030/search",
                         params={"content_type": "ocr", "limit": 20},
@@ -111,6 +114,8 @@ def get_screen_text():
                     if len(_shown_content_hashes) > 100:
                         _shown_content_hashes = set(list(_shown_content_hashes)[-50:])
 
+                    # First scan complete - relax time window
+                    _is_first_scan = False
                     return text, app
     except Exception as e:
         console.print(f"[red]Screenpipe error: {e}[/red]")
