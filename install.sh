@@ -27,23 +27,34 @@ if [ "$macos_version" -lt 12 ]; then
 fi
 echo "  ✓ macOS version OK"
 
-# Check for Homebrew
+# Check for Homebrew - install if missing
 if ! command -v brew &> /dev/null; then
-    echo -e "${RED}Error: Homebrew not found${NC}"
-    echo "Install it with: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
-    exit 1
+    echo "  Installing Homebrew..."
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    # Add Homebrew to PATH for this session
+    if [ -f /opt/homebrew/bin/brew ]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+    elif [ -f /usr/local/bin/brew ]; then
+        eval "$(/usr/local/bin/brew shellenv)"
+    fi
+    echo "  ✓ Homebrew installed"
+else
+    echo "  ✓ Homebrew found"
 fi
-echo "  ✓ Homebrew found"
 
-# Check Python version
-python_version=$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d. -f1,2)
+# Check Python version - install if missing or too old
+python_version=$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d. -f1,2 || echo "0.0")
 python_major=$(echo "$python_version" | cut -d. -f1)
 python_minor=$(echo "$python_version" | cut -d. -f2)
 if [ "$python_major" -lt 3 ] || ([ "$python_major" -eq 3 ] && [ "$python_minor" -lt 10 ]); then
-    echo -e "${RED}Error: Python 3.10+ required (found $python_version)${NC}"
-    exit 1
+    echo "  Installing Python 3.10..."
+    brew install python@3.10
+    # Link it
+    brew link python@3.10 --overwrite 2>/dev/null || true
+    echo "  ✓ Python 3.10 installed"
+else
+    echo "  ✓ Python $python_version found"
 fi
-echo "  ✓ Python $python_version found"
 
 echo ""
 echo -e "${YELLOW}Installing dependencies...${NC}"
