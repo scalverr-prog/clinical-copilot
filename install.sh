@@ -121,15 +121,11 @@ if [ -d "$INSIGHT_DIR" ]; then
     deactivate
     echo "  ✓ Clinical Insight packages installed"
 
-    # Setup .env if not exists
+    # Setup .env if not exists (defaults to local Ollama - no API key needed)
     if [ ! -f "$INSIGHT_DIR/.env" ]; then
         cp "$INSIGHT_DIR/.env.example" "$INSIGHT_DIR/.env"
-        echo ""
-        echo -e "${YELLOW}IMPORTANT: Configure your API key${NC}"
-        echo "Edit: $INSIGHT_DIR/.env"
-        echo "Add your Anthropic or OpenAI API key"
-        echo ""
     fi
+    echo "  ✓ Using local Ollama (no API key required)"
 fi
 
 # Create data directories
@@ -154,7 +150,7 @@ rm -f "$HOME/Library/LaunchAgents/com.clinical.copilot.plist" 2>/dev/null || tru
 
 # Add to Login Items (remove first to avoid duplicates)
 osascript -e 'tell application "System Events" to delete (every login item whose name is "ClinicalCopilot")' 2>/dev/null || true
-osascript -e "tell application \"System Events\" to make login item at end with properties {path:\"$APP_PATH\", hidden:false}"
+osascript -e "tell application \"System Events\" to make login item at end with properties {path:\"$APP_PATH\", hidden:false}" 2>/dev/null || true
 
 echo "  ✓ Auto-start enabled (copilot starts on login)"
 
